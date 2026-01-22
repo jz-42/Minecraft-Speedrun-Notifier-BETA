@@ -1,0 +1,12 @@
+{
+  // Keeps the sidebar tidy by nesting “child” files under their “parent” file.
+  // Example: package-lock.json appears under package.json.
+  "explorer.fileNesting.enabled": true,
+  "explorer.fileNesting.patterns": {
+    "package.json": "package-lock.json,yarn.lock,pnpm-lock.yaml,npm-shrinkwrap.json",
+    "vite.config.*": "vitest.config.*",
+    ".env": ".env.*"
+  }
+}
+
+

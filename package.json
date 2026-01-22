@@ -1,0 +1,28 @@
+{
+  "name": "runalert",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "start": "node src/watcher/run_watcher.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:backend": "vitest run",
+    "test:dashboard": "npm --prefix dashboard test",
+    "test:layout": "npm --prefix dashboard run test:layout",
+    "test:visual": "npm --prefix dashboard run test:visual",
+    "test:visual:update": "npm --prefix dashboard run test:visual:update",
+    "test:all": "npm run test:backend && npm run test:dashboard && npm run test:layout",
+    "test:all:with-visual": "npm run test:all && npm run test:visual"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.2",
+    "node-notifier": "^10.0.1"
+  },
+  "devDependencies": {
+    "supertest": "^6.3.4",
+    "vitest": "^2.1.8"
+  }
+}
+

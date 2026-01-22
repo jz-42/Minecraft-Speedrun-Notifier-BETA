@@ -1,0 +1,1054 @@
+/* App.css */
+:root{
+  --bg: #1f1f1f;
+  --text: #d7d7d7;
+  --muted: #9a9a9a;
+  --accent: #f1c66d;
+  --accentGlow: rgba(241, 198, 109, 0.16);
+  --fieldA: rgba(126, 92, 176, 0.10);
+  --fieldB: rgba(150, 70, 90, 0.08);
+  --fieldC: rgba(92, 78, 140, 0.08);
+  --fieldNoise: rgba(255,255,255,0.03);
+  --avatar: #d9d9d9;
+  --avatarAdd: #e9ecef;
+  --shadow: 0 10px 30px rgba(0,0,0,0.45);
+}
+
+.page{
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--text);
+  position: relative;
+  overflow-x: hidden;
+}
+
+.page::before{
+  content: "";
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(60% 45% at 50% 32%,
+      var(--fieldA),
+      rgba(0,0,0,0) 70%
+    ),
+    radial-gradient(55% 40% at 68% 55%,
+      var(--fieldB),
+      rgba(0,0,0,0) 72%
+    ),
+    radial-gradient(45% 35% at 32% 58%,
+      var(--fieldC),
+      rgba(0,0,0,0) 70%
+    ),
+    linear-gradient(
+      180deg,
+      rgba(0,0,0,0) 0%,
+      rgba(0,0,0,0.22) 100%
+    );
+  opacity: 0.6;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.page::after{
+  content: "";
+  position: fixed;
+  inset: 0;
+  background:
+    repeating-linear-gradient(
+      120deg,
+      var(--fieldNoise) 0 1px,
+      rgba(0,0,0,0) 1px 6px
+    ),
+    repeating-linear-gradient(
+      20deg,
+      rgba(255,255,255,0.02) 0 1px,
+      rgba(0,0,0,0) 1px 7px
+    );
+  opacity: 0.35;
+  mix-blend-mode: soft-light;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.frame{
+  /* Wider on large monitors, but still centered + readable */
+  max-width: 1680px;
+  margin: 0 auto;
+  padding: clamp(28px, 4vw, 44px) clamp(18px, 4vw, 56px) 80px;
+  position: relative;
+  z-index: 1;
+}
+
+.titleRow{
+  position: relative;
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:24px;
+}
+
+.titleLeft{
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  /* Reserve space for the settings button so the title never tucks under it. */
+  padding-right: 72px;
+}
+
+.titleLeft::before{
+  content: "";
+  position: absolute;
+  left: -18px;
+  top: -16px;
+  width: min(860px, 92vw);
+  height: 120px;
+  background: radial-gradient(
+    60% 80% at 0% 50%,
+    rgba(241, 198, 109, 0.22),
+    rgba(0,0,0,0) 70%
+  );
+  opacity: 0.25;
+  filter: blur(14px);
+  pointer-events: none;
+  z-index: -1;
+}
+
+h1{
+  margin:0;
+  /* Slightly responsive so 1280px doesn't wrap awkwardly */
+  font-size: clamp(46px, 4.2vw, 64px);
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  line-height: 1.05;
+}
+
+.titleLine{
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.brandRow{
+  /* Logo lockup: dragon + title stay together on all widths */
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  /* Shared sizing so slot + dragon stay centered together */
+  /* Keep title close, but don't yank the art into the corner */
+  --brandSlotW: clamp(150px, 10vw, 200px);
+  --brandDragonW: clamp(240px, 18vw, 320px);
+  --brandDragonH: clamp(200px, 15vw, 260px);
+  /* Cap how far left the art is allowed to bleed */
+  --brandDragonBleedLeftMax: -40px;
+}
+
+.brandArtSlot{
+  position: relative;
+  /*
+   * Reserve less horizontal space than the art's full width.
+   * The art itself can overflow left/right, but we want the title visually "close" to it.
+   */
+  width: var(--brandSlotW);
+  height: 0; /* prevent the art from inflating the header height */
+  overflow: visible;
+  flex: 0 0 auto;
+}
+
+.brandText{
+  display: grid;
+  gap: 8px;
+  /* Lockup behavior: title is always immediately right of the art */
+  justify-items: start;
+  text-align: left;
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.titleDragon{
+  position: absolute;
+  /* Nudge into the frame padding so the art feels anchored to the page edge */
+  /* Center the larger dragon art inside the smaller reserved slot */
+  left: max(
+    calc((var(--brandSlotW) - var(--brandDragonW)) / 2),
+    var(--brandDragonBleedLeftMax)
+  );
+  top: -52px;
+  width: var(--brandDragonW);
+  height: var(--brandDragonH);
+  /* Keep the layout stable: if the image isn't present, it's just an empty decorative slot. */
+  background-image: url("/title-art.png");
+  background-repeat: no-repeat;
+  background-size: contain;
+  background-position: left center;
+  opacity: 0.75;
+  filter: drop-shadow(0 18px 30px rgba(0,0,0,0.45));
+  transform: none;
+  pointer-events: none;
+}
+
+@media (max-width: 900px){
+  .titleDragon{ display:none; }
+  .brandRow{
+    flex-direction: column;
+    gap: 10px;
+  }
+  .brandArtSlot{ display:none; }
+}
+
+.metaRow{
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+}
+
+.quietHoursPill{
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(0,0,0,0.22);
+  color: rgba(255,255,255,0.75);
+  font-size: 13px;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: transform 120ms ease, border-color 120ms ease, background 120ms ease;
+  max-width: 100%;
+}
+
+.quietHoursPill:hover{
+  transform: translateY(-1px);
+  border-color: rgba(255, 214, 122, 0.35);
+  background: rgba(0,0,0,0.30);
+}
+
+.quietHoursPill:focus-visible{
+  outline: 3px solid rgba(255, 214, 122, 0.35);
+  outline-offset: 3px;
+}
+
+.quietHoursPill:active{
+  transform: translateY(0px) scale(0.99);
+}
+
+.appTitle{
+  color: rgba(255, 214, 122, 0.95);
+  text-shadow:
+    0 12px 30px rgba(0,0,0,0.45),
+    0 0 22px rgba(241, 198, 109, 0.22);
+  letter-spacing: 0.2px;
+}
+
+.tag{
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid rgba(255, 214, 122, 0.20);
+  background: rgba(0,0,0,0.25);
+  color: rgba(255, 235, 198, 0.75);
+  font-size: 14px;
+  letter-spacing: 0.04em;
+}
+
+.sub{
+  color: var(--muted);
+}
+
+.iconBtn{
+  width: 52px;
+  height: 52px;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: linear-gradient(
+    180deg,
+    rgba(255,255,255,0.08),
+    rgba(0,0,0,0.34)
+  );
+  backdrop-filter: blur(6px);
+  box-shadow:
+    0 10px 26px rgba(0,0,0,0.34),
+    inset 0 1px 0 rgba(255,255,255,0.08),
+    inset 0 -10px 22px rgba(0,0,0,0.18);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  color: rgba(255,255,255,0.80);
+  line-height: 0;
+  position: relative;
+  overflow: hidden;
+  transition:
+    transform 120ms ease,
+    background 120ms ease,
+    border-color 120ms ease;
+}
+
+/* Keep the settings button anchored without affecting header centering. */
+.titleRow > .iconBtn{
+  position: absolute;
+  right: 0;
+  top: 0;
+}
+
+.iconBtn::before{
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06);
+  pointer-events: none;
+}
+
+.iconBtn:hover{
+  transform: translateY(-1px);
+  border-color: rgba(255,255,255,0.16);
+  background: linear-gradient(
+    180deg,
+    rgba(255,255,255,0.10),
+    rgba(0,0,0,0.30)
+  );
+}
+
+.iconBtn:active{
+  transform: translateY(0px) scale(0.98);
+}
+
+.iconBtn:focus-visible{
+  outline: 3px solid rgba(255, 214, 122, 0.35);
+  outline-offset: 3px;
+}
+
+.iconSvg{
+  width: 22px;
+  height: 22px;
+  display: block;
+  transform: translateY(-0.5px);
+}
+
+.grid{
+  margin-top: 34px;
+  display: grid;
+  /* Stable tracks: avoid stretched 1fr columns (which create "dead space" and feel misaligned). */
+  grid-template-columns: repeat(auto-fit, 220px);
+  justify-content: center;
+  gap: clamp(28px, 3.5vw, 52px);
+  position: relative;
+  z-index: 1;
+}
+
+.grid::before{
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: -140px;
+  width: min(1200px, 90vw);
+  height: 420px;
+  transform: translateX(-50%);
+  background: radial-gradient(
+    closest-side,
+    rgba(132, 98, 190, 0.18),
+    rgba(0,0,0,0)
+  );
+  opacity: 0.45;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.grid > *{
+  position: relative;
+  z-index: 1;
+}
+
+.avatarTile{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap: 18px;
+}
+
+.avatarBtn{
+  width: 220px;
+  height: 220px;
+  border-radius: 999px;
+  /* Glass ring border (gradient border + subtle highlight) */
+  border: 1px solid transparent;
+  background:
+    radial-gradient(circle at 32% 28%,
+      rgba(255,255,255,0.22),
+      rgba(255,255,255,0.08) 42%,
+      rgba(0,0,0,0.20) 100%
+    ) padding-box,
+    linear-gradient(
+      145deg,
+      rgba(255,255,255,0.30),
+      rgba(255,255,255,0.06) 50%,
+      rgba(0,0,0,0.45)
+    ) border-box;
+  position: relative;
+  z-index: 0;
+  isolation: isolate;
+  box-shadow:
+    0 12px 28px rgba(0,0,0,0.40),
+    0 0 0 1px rgba(255,255,255,0.06);
+  cursor: pointer;
+  transition:
+    transform 180ms cubic-bezier(0.2, 0.9, 0.2, 1),
+    box-shadow 180ms ease,
+    filter 180ms ease,
+    border-color 180ms ease;
+  will-change: transform;
+}
+
+.avatarBtn::before{
+  content: "";
+  position: absolute;
+  inset: -10px;
+  border-radius: 999px;
+  background: radial-gradient(
+    circle at 50% 20%,
+    rgba(241, 198, 109, 0.22),
+    rgba(241, 198, 109, 0.08) 45%,
+    rgba(0,0,0,0) 70%
+  );
+  opacity: 0.20;
+  filter: blur(10px);
+  transform: scale(0.98);
+  transition: opacity 180ms ease, transform 180ms ease;
+  z-index: -1;
+}
+
+.avatarBtn::after{
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: radial-gradient(
+    circle at 28% 18%,
+    rgba(255,255,255,0.18),
+    rgba(255,255,255,0.02) 42%,
+    rgba(0,0,0,0) 60%
+  );
+  box-shadow:
+    inset 0 2px 6px rgba(255,255,255,0.18),
+    inset 0 -18px 26px rgba(0,0,0,0.42),
+    inset 0 0 0 1px rgba(255,255,255,0.08);
+  opacity: 0.72;
+  transition: opacity 180ms ease, box-shadow 180ms ease;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.avatarBtn:hover{
+  transform: translateY(-4px) scale(1.035);
+  box-shadow:
+    0 20px 46px rgba(0,0,0,0.55),
+    0 0 0 1px rgba(255,255,255,0.12);
+  filter: drop-shadow(0 0 10px var(--accentGlow));
+  border-color: rgba(255,255,255,0.18);
+}
+
+.avatarBtn:hover::before{
+  opacity: 0.45;
+  transform: scale(1.04);
+}
+
+.avatarBtn:hover::after{
+  opacity: 0.90;
+  box-shadow:
+    inset 0 2px 8px rgba(255,255,255,0.24),
+    inset 0 -24px 36px rgba(0,0,0,0.50);
+}
+
+.avatarBtn:active{
+  transform: translateY(-1px) scale(0.99);
+  box-shadow:
+    0 12px 30px rgba(0,0,0,0.45),
+    0 0 0 1px rgba(255,255,255,0.10);
+  filter: drop-shadow(0 0 8px rgba(241, 198, 109, 0.18));
+}
+
+.avatarImg{
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 999px;
+  object-fit: cover;
+  object-position: center;
+  filter: saturate(1.08) contrast(1.03);
+  transform: scale(1);
+  transition: transform 180ms ease, filter 180ms ease;
+  z-index: 0;
+}
+
+.avatarBtn:hover .avatarImg{
+  transform: scale(1.015);
+  filter: saturate(1.12) contrast(1.05);
+}
+
+.avatarBtn:active .avatarImg{
+  transform: scale(0.995);
+}
+
+.avatarBtn:focus-visible{
+  outline: 3px solid rgba(255, 214, 122, 0.35);
+  outline-offset: 6px;
+}
+
+.avatarBtn.add{
+  background:
+    radial-gradient(circle at 32% 28%,
+      rgba(255,255,255,0.22),
+      rgba(255,255,255,0.12) 38%,
+      rgba(0,0,0,0.06) 100%
+    ) padding-box,
+    linear-gradient(
+      135deg,
+      rgba(255,255,255,0.22),
+      rgba(255,255,255,0.06) 45%,
+      rgba(0,0,0,0.18)
+    ) border-box,
+    var(--avatarAdd);
+}
+
+.avatarBtn.add::before{
+  background: radial-gradient(
+    circle at 50% 20%,
+    rgba(255,255,255,0.35),
+    rgba(255,255,255,0.10) 45%,
+    rgba(0,0,0,0) 70%
+  );
+  opacity: 0.24;
+}
+
+.addTile .label{
+  color: rgba(255,255,255,0.62);
+  font-weight: 600;
+}
+
+.addPlus{
+  width: 66px;
+  height: 66px;
+  color: rgba(0,0,0,0.62);
+  filter: drop-shadow(0 8px 18px rgba(0,0,0,0.22));
+}
+
+/* Option A: keep add-tile interactions consistent, but slightly toned down */
+.avatarBtn.add:hover{
+  transform: scale(1.015);
+}
+
+.avatarBtn.add:active{
+  transform: scale(0.995);
+}
+
+.statusDot{
+  width: 54px;
+  height: 54px;
+  border-radius: 999px;
+  position:absolute;
+  right: -6px;
+  bottom: 26px;
+  background: #6CFF6C; /* green */
+  box-shadow: 0 6px 16px rgba(0,0,0,0.45);
+  border: 2px solid rgba(0,0,0,0.35);
+}
+
+.milestoneBadge{
+  position: absolute;
+  right: -18px;
+  bottom: 18px;
+  z-index: 2;
+  height: 36px;
+  min-width: 76px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: rgba(0,0,0,0.55);
+  backdrop-filter: blur(7px);
+  color: rgba(255,255,255,0.92);
+  border: 1px solid rgba(255,255,255,0.10);
+  box-shadow:
+    0 10px 22px rgba(0,0,0,0.48),
+    inset 0 1px 0 rgba(255,255,255,0.06);
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.milestoneBadge.live{
+  animation: badgeBreathe 1.7s ease-in-out infinite;
+}
+
+.milestoneBadge.final{
+  animation: none;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 214, 122, 0.30),
+    rgba(255, 190, 74, 0.18)
+  );
+  border-color: rgba(255, 214, 122, 0.42);
+  color: rgba(255, 243, 214, 0.98);
+  box-shadow:
+    0 12px 26px rgba(0,0,0,0.55),
+    0 0 0 4px rgba(255, 214, 122, 0.10);
+}
+
+@keyframes badgeBreathe{
+  0%{ transform: scale(1); opacity: 0.86; }
+  55%{ transform: scale(1.06); opacity: 1; }
+  100%{ transform: scale(1); opacity: 0.86; }
+}
+
+.label{
+  font-size: 28px;
+  color: rgba(255,255,255,0.78);
+  font-weight: 650;
+  letter-spacing: 0.008em;
+  text-shadow: 0 10px 26px rgba(0,0,0,0.40);
+}
+
+.milestoneSubtitle{
+  font-size: 12px;
+  margin-top: 8px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  color: rgba(255,255,255,0.74);
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  font-variant-numeric: tabular-nums;
+  background: linear-gradient(
+    180deg,
+    rgba(255,255,255,0.08),
+    rgba(0,0,0,0.35)
+  );
+  border: 1px solid rgba(255,255,255,0.12);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.08),
+    0 8px 18px rgba(0,0,0,0.40);
+}
+
+.driftNote{
+  margin-top: 6px;
+  color: rgba(255,255,255,0.58);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.driftNote a{
+  color: rgba(255, 214, 122, 0.95);
+  text-decoration: none;
+  border-bottom: 1px solid rgba(255, 214, 122, 0.35);
+}
+
+.driftNote a:hover{
+  color: rgba(255, 232, 166, 0.98);
+  border-bottom-color: rgba(255, 232, 166, 0.6);
+}
+
+.tileSub{
+  font-size: 14px;
+  margin-top: 6px;
+  color: rgba(255,255,255,0.42);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+.installCard{
+  margin-top: 26px;
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 20px 22px;
+  border-radius: 18px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(255,255,255,0.04);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
+}
+
+.installTitle{
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.installBody{
+  margin-top: 8px;
+  font-size: 14px;
+  color: rgba(255,255,255,0.62);
+}
+
+.installSteps{
+  margin-top: 12px;
+  font-size: 13px;
+  color: rgba(255,255,255,0.45);
+  line-height: 1.4;
+}
+
+.installActions{
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.installButton{
+  padding: 10px 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.18);
+  color: #fff;
+  background: linear-gradient(135deg, rgba(120,255,120,0.22), rgba(80,200,255,0.16));
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.installButton:hover{
+  border-color: rgba(255,255,255,0.32);
+}
+
+.installHint{
+  font-size: 12px;
+  color: rgba(255,255,255,0.45);
+}
+
+.creditRow{
+  margin-top: 34px;
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  font-size: 13px;
+  color: rgba(255,255,255,0.30);
+}
+
+.creditLink{
+  color: rgba(255, 214, 122, 0.70);
+  text-decoration: none;
+  border-bottom: 1px solid rgba(255, 214, 122, 0.28);
+}
+
+.creditLink:hover{
+  color: rgba(255, 214, 122, 0.88);
+  border-bottom-color: rgba(255, 214, 122, 0.42);
+}
+
+/* Milestone editor row + time input */
+.milestoneRow{
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(255,255,255,0.03);
+  gap: 12px;
+}
+
+.milestoneControls{
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.timeGroup{
+  display: grid;
+  gap: 6px;
+}
+
+.timeLabels{
+  display: grid;
+  grid-template-columns: 18px minmax(4ch, 7ch) 12px 4ch;
+  align-items: center;
+  color: rgba(255,255,255,0.35);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: lowercase;
+  padding: 0 12px;
+}
+
+.timeInputs{
+  display: grid;
+  grid-template-columns: 18px minmax(4ch, 7ch) 12px 4ch;
+  align-items: center;
+  gap: 0;
+  padding: 7px 10px;
+  border-radius: 18px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(0,0,0,0.20));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), inset 0 -10px 18px rgba(0,0,0,0.18);
+}
+
+.timeInputs:focus-within{
+  border-color: rgba(120,255,120,0.35);
+  box-shadow: 0 0 0 3px rgba(120,255,120,0.10);
+}
+
+.timePrefix{
+  color: rgba(255,255,255,0.35);
+  font-size: 13px;
+  text-align: center;
+}
+
+.timeColon{
+  color: rgba(255,255,255,0.30);
+  font-size: 20px;
+  text-align: center;
+  transform: translateY(-1px);
+}
+
+.timeField{
+  width: 100%;
+  height: 36px;
+  border-radius: 10px;
+  border: none;
+  background: transparent;
+  color: #eaeaea;
+  padding: 0 4px;
+  font-size: 28px;
+  letter-spacing: 0.01em;
+  text-align: center;
+  outline: none;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+
+/* Hide number spinners (makes it feel like a timer, not a form field) */
+.timeField::-webkit-outer-spin-button,
+.timeField::-webkit-inner-spin-button{
+  -webkit-appearance: none;
+  margin: 0;
+}
+.timeField[type="number"]{
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+.timeField::placeholder{
+  color: rgba(255,255,255,0.22);
+}
+
+/* Quiet Hours modal */
+.qhOverlay{
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  backdrop-filter: blur(6px);
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  z-index: 50;
+}
+
+.qhModal{
+  width: min(860px, 96vw);
+  border-radius: 18px;
+  background: #3a3b42;
+  box-shadow: 0 16px 60px rgba(0,0,0,0.55);
+  border: 1px solid rgba(255,255,255,0.08);
+  padding: 22px;
+}
+
+.qhHeader{
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.qhTitle{
+  font-size: 44px;
+  font-weight: 700;
+}
+
+.qhHelp{
+  margin-top: 6px;
+  color: rgba(255,255,255,0.62);
+  font-size: 14px;
+  line-height: 1.4;
+  max-width: 560px;
+}
+
+.qhError{
+  margin-top: 12px;
+  color: #ff6b6b;
+  font-size: 14px;
+}
+
+.qhBody{
+  margin-top: 16px;
+  display: grid;
+  gap: 14px;
+}
+
+.qhEmpty{
+  color: rgba(255,255,255,0.62);
+  font-size: 15px;
+  padding: 14px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(255,255,255,0.03);
+}
+
+.qhList{
+  display: grid;
+  gap: 12px;
+}
+
+.qhRow{
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(255,255,255,0.03);
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.qhRowLabel{
+  font-size: 14px;
+  color: rgba(255,255,255,0.55);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.qhTimes{
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+@media (max-width: 720px){
+  .qhTimes{ grid-template-columns: 1fr; }
+}
+
+.qhTimeBlock{
+  display: grid;
+  gap: 6px;
+}
+
+.qhTimeCaption{
+  color: rgba(255,255,255,0.42);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.qhTimeInputs{
+  display: grid;
+  grid-template-columns: minmax(4ch, 7ch) 12px minmax(4ch, 7ch) 84px;
+  align-items: center;
+  padding: 7px 10px;
+  border-radius: 18px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(0,0,0,0.20));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), inset 0 -10px 18px rgba(0,0,0,0.18);
+}
+
+.qhTimeInputs:focus-within{
+  border-color: rgba(255, 214, 122, 0.35);
+  box-shadow: 0 0 0 3px rgba(255, 214, 122, 0.10);
+}
+
+.qhTimeField{
+  width: 100%;
+  height: 36px;
+  border-radius: 10px;
+  border: none;
+  background: transparent;
+  color: #eaeaea;
+  padding: 0 4px;
+  font-size: 26px;
+  letter-spacing: 0.01em;
+  text-align: center;
+  outline: none;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+
+.qhTimeField::-webkit-outer-spin-button,
+.qhTimeField::-webkit-inner-spin-button{
+  -webkit-appearance: none;
+  margin: 0;
+}
+.qhTimeField[type="number"]{
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+.qhTimeField::placeholder{
+  color: rgba(255,255,255,0.22);
+}
+
+.qhColon{
+  color: rgba(255,255,255,0.30);
+  font-size: 20px;
+  text-align: center;
+  transform: translateY(-1px);
+}
+
+.qhAmPm{
+  height: 36px;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(0,0,0,0.25);
+  color: rgba(255,255,255,0.86);
+  font-size: 14px;
+  padding: 0 10px;
+  outline: none;
+  cursor: pointer;
+}
+
+.qhRowActions{
+  display: flex;
+  justify-content: flex-end;
+}
+
+.qhRemove{
+  height: 36px;
+  border-radius: 10px;
+  border: 1px solid rgba(255,120,120,0.22);
+  background: rgba(255,120,120,0.10);
+  color: rgba(255, 235, 235, 0.92);
+}
+
+.qhFooter{
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.qhAdd{
+  height: 40px;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(255,255,255,0.06);
+  color: rgba(255,255,255,0.85);
+}
+
+.qhAdd:disabled{
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.qhFooterRight{
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.qhSave{
+  height: 40px;
+  padding: 0 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(120,255,120,0.25);
+  background: rgba(120,255,120,0.12);
+  color: #eaeaea;
+}
