@@ -18,7 +18,6 @@ describe("notification title formatting", () => {
     expect(milestoneEmoji("bastion")).toBe("🟨🐷");
     expect(milestoneEmoji("fortress")).toBe("🏰🧱");
     expect(milestoneEmoji("first_portal")).toBe("🌀✨");
-    expect(milestoneEmoji("second_portal")).toBe("🌀🔁");
     expect(milestoneEmoji("stronghold")).toBe("👁️");
     expect(milestoneEmoji("end")).toBe("🐉");
     expect(milestoneEmoji("finish")).toBe("👑");
@@ -30,7 +29,6 @@ describe("notification title formatting", () => {
     expect(milestonePrettyLabel("bastion")).toBe("Bastion");
     expect(milestonePrettyLabel("fortress")).toBe("Fortress");
     expect(milestonePrettyLabel("first_portal")).toBe("First Portal");
-    expect(milestonePrettyLabel("second_portal")).toBe("Second Portal");
     expect(milestonePrettyLabel("stronghold")).toBe("Stronghold");
     expect(milestonePrettyLabel("end")).toBe("End");
     expect(milestonePrettyLabel("finish")).toBe("Finish");

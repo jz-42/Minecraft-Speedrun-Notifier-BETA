@@ -35,7 +35,6 @@ const MILESTONES = [
   "bastion",
   "fortress",
   "first_portal",
-  "second_portal",
   "stronghold",
   "end",
   "finish",

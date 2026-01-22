@@ -7,7 +7,6 @@
     "bastion": 300000,
     "fortress": 360000,
     "first_portal": 420000,
-    "second_portal": 520000,
     "stronghold": 600000,
     "end": 720000,
     "finish": 780000,
@@ -16,10 +15,8 @@
     "bastionRta": 310000,
     "fortressRta": 370000,
     "first_portalRta": 430000,
-    "second_portalRta": 530000,
     "strongholdRta": 610000,
     "endRta": 730000,
     "finishRta": 790000
   }
 }
-

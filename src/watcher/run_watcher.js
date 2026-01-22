@@ -182,7 +182,6 @@ const LIVE_EVENT_BY_MILESTONE = {
   bastion: "rsg.enter_bastion",
   fortress: "rsg.enter_fortress",
   first_portal: "rsg.first_portal",
-  second_portal: "rsg.second_portal",
   stronghold: "rsg.enter_stronghold",
   end: "rsg.enter_end",
   finish: "rsg.credits",

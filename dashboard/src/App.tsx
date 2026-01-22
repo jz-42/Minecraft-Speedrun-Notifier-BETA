@@ -596,8 +596,6 @@ function App() {
         return "Fortress";
       case "first_portal":
         return "1st Portal";
-      case "second_portal":
-        return "2nd Portal";
       case "stronghold":
         return "Stronghold";
       case "end":

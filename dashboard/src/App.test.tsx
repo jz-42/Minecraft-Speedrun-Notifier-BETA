@@ -67,22 +67,21 @@ describe("App", () => {
     expect(await screen.findByTestId("header-quietHours")).toBeTruthy();
   });
 
-  it("add streamer uses default milestones (1 hour for debugging)", async () => {
+  it("add streamer uses default milestones (disabled by default)", async () => {
     // Critical: New streamers should inherit defaultMilestones from config.
-    // For debugging, all defaults are set to 3600 seconds (1 hour).
+    // Defaults are disabled with 00:00 for new streamers.
     const initialCfg: any = {
       streamers: ["xQcOW"],
       clock: "IGT",
       quietHours: [],
       defaultMilestones: {
-        nether: { thresholdSec: 3600, enabled: true },
-        bastion: { thresholdSec: 3600, enabled: true },
-        fortress: { thresholdSec: 3600, enabled: true },
-        first_portal: { thresholdSec: 3600, enabled: true },
-        second_portal: { thresholdSec: 3600, enabled: true },
-        stronghold: { thresholdSec: 3600, enabled: true },
-        end: { thresholdSec: 3600, enabled: true },
-        finish: { thresholdSec: 3600, enabled: true },
+        nether: { thresholdSec: 0, enabled: false },
+        bastion: { thresholdSec: 0, enabled: false },
+        fortress: { thresholdSec: 0, enabled: false },
+        first_portal: { thresholdSec: 0, enabled: false },
+        stronghold: { thresholdSec: 0, enabled: false },
+        end: { thresholdSec: 0, enabled: false },
+        finish: { thresholdSec: 0, enabled: false },
       },
       profiles: {},
     };
@@ -132,9 +131,9 @@ describe("App", () => {
     expect(newStreamerBtn).toBeTruthy();
     fireEvent.click(newStreamerBtn!);
 
-    // Check that milestones show 60:00 (3600 seconds = 1 hour)
+    // Check that milestones show 00:00 (disabled defaults)
     const netherMinutes = await screen.findByLabelText("nether-minutes");
-    expect((netherMinutes as HTMLInputElement).value).toBe("60");
+    expect((netherMinutes as HTMLInputElement).value).toBe("00");
     const netherSeconds = await screen.findByLabelText("nether-seconds");
     expect((netherSeconds as HTMLInputElement).value).toBe("00");
   });

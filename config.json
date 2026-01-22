@@ -9,37 +9,64 @@
   ],
   "defaultMilestones": {
     "nether": {
-      "thresholdSec": 240,
-      "enabled": true
+      "thresholdSec": 0,
+      "enabled": false
     },
     "bastion": {
-      "thresholdSec": 360,
-      "enabled": true
+      "thresholdSec": 0,
+      "enabled": false
     },
     "fortress": {
-      "thresholdSec": 600,
-      "enabled": true
+      "thresholdSec": 0,
+      "enabled": false
     },
     "first_portal": {
-      "thresholdSec": 720,
-      "enabled": true
-    },
-    "second_portal": {
-      "thresholdSec": 780,
-      "enabled": true
+      "thresholdSec": 0,
+      "enabled": false
     },
     "stronghold": {
-      "thresholdSec": 840,
-      "enabled": true
+      "thresholdSec": 0,
+      "enabled": false
     },
     "end": {
-      "thresholdSec": 930,
-      "enabled": true
+      "thresholdSec": 0,
+      "enabled": false
     },
     "finish": {
-      "thresholdSec": 970,
-      "enabled": true
+      "thresholdSec": 0,
+      "enabled": false
     }
   },
-  "profiles": {}
+  "profiles": {
+    "xQcOW": {
+      "nether": {
+        "thresholdSec": 240,
+        "enabled": true
+      },
+      "bastion": {
+        "thresholdSec": 360,
+        "enabled": true
+      },
+      "fortress": {
+        "thresholdSec": 600,
+        "enabled": true
+      },
+      "first_portal": {
+        "thresholdSec": 720,
+        "enabled": true
+      },
+      "stronghold": {
+        "thresholdSec": 840,
+        "enabled": true
+      },
+      "end": {
+        "thresholdSec": 960,
+        "enabled": true
+      },
+      "finish": {
+        "thresholdSec": 928,
+        "enabled": true
+      }
+    }
+  }
 }

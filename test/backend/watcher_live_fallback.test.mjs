@@ -57,23 +57,6 @@ describe("watcher live-run fallback", () => {
     expect(res).toEqual({ ms: 12000, usedClock: "IGT", source: "live" });
   });
 
-  it("maps second_portal to rsg.second_portal", () => {
-    const world = { data: {} };
-    const liveRun = {
-      eventList: [{ eventId: "rsg.second_portal", igt: 8000, rta: 8500 }],
-    };
-
-    const res = getSplitWithLiveFallback(
-      world,
-      liveRun,
-      "second_portal",
-      "IGT",
-      "RTA"
-    );
-
-    expect(res).toEqual({ ms: 8000, usedClock: "IGT", source: "live" });
-  });
-
   it("matches live runs using world nickname when streamer is a twitch handle", () => {
     const liveRuns = [{ nickname: "xQcOW" }, { nickname: "SomeoneElse" }];
     const match = findLiveRunForStreamer(liveRuns, ["xqc", "xQcOW"]);

@@ -18,8 +18,6 @@ function milestonePrettyLabel(milestone) {
       return "Fortress";
     case "first_portal":
       return "First Portal";
-    case "second_portal":
-      return "Second Portal";
     case "stronghold":
       return "Stronghold";
     case "end":
@@ -44,7 +42,6 @@ function milestoneEnteredLabel(milestone) {
   // - Except: First Portal, Finish (keep as plain labels)
   const label = milestonePrettyLabel(milestone);
   if (milestone === "first_portal") return label;
-  if (milestone === "second_portal") return label;
   if (milestone === "finish") return label;
   return `Entered ${label}`;
 }
@@ -60,8 +57,6 @@ function milestoneEmoji(milestone) {
       return "🏰🧱";
     case "first_portal":
       return "🌀✨";
-    case "second_portal":
-      return "🌀🔁";
     case "stronghold":
       return "👁️";
     case "end":
