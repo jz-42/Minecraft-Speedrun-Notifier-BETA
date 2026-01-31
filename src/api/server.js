@@ -10,6 +10,7 @@ function defaultIsAllowedOrigin(origin) {
 
 function createApp({
   configPath = path.join(__dirname, "../../config.json"),
+  configDir = null,
   isAllowedOrigin = defaultIsAllowedOrigin,
   notifySend = require("../notify/router").send,
   paceman = require("../paceman/client"),
@@ -17,6 +18,16 @@ function createApp({
   const app = express();
   app.use(express.json());
   const MAX_NAMES = 15; // keep consistent with dashboard /config max streamers
+
+  const SUPABASE_URL =
+    process.env.SUPABASE_URL || process.env.SUPABASE_PROJECT_URL || "";
+  const SUPABASE_SERVICE_KEY =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.SUPABASE_SERVICE_KEY ||
+    "";
+  const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || "";
+  const SUPABASE_TABLE =
+    process.env.SUPABASE_CONFIG_TABLE || "runalert_configs";
 
   // Very small in-memory cache for endpoints that proxy paceman.gg.
   // This keeps the dashboard from hammering paceman when it polls.
@@ -34,6 +45,9 @@ function createApp({
     memCache.set(key, { exp: Date.now() + ttlMs, value });
   }
 
+  const TWITCH_CLIENT_ID = process.env.TWITCH_CLIENT_ID || "";
+  const TWITCH_CLIENT_SECRET = process.env.TWITCH_CLIENT_SECRET || "";
+
   // Allow local dev frontends (Vite often bumps ports if 5173 is taken).
   // Keep this restricted to localhost / 127.0.0.1 for safety.
   app.use(
@@ -44,29 +58,166 @@ function createApp({
     })
   );
 
-  function readConfig() {
-    const raw = fs.readFileSync(configPath, "utf8");
+  const resolvedConfigDir =
+    configDir ||
+    process.env.RUNALERT_CONFIG_DIR ||
+    process.env.CONFIG_DIR ||
+    path.join(path.dirname(configPath), "configs");
+
+  function ensureConfigDir() {
+    if (!resolvedConfigDir) return;
+    if (!fs.existsSync(resolvedConfigDir)) {
+      fs.mkdirSync(resolvedConfigDir, { recursive: true });
+    }
+  }
+
+  function readConfigFromPath(targetPath) {
+    const raw = fs.readFileSync(targetPath, "utf8");
     return JSON.parse(raw);
   }
 
-  function writeConfig(next) {
+  function writeConfigToPath(targetPath, next) {
     // pretty-print so it stays readable
-    fs.writeFileSync(configPath, JSON.stringify(next, null, 2) + "\n");
+    fs.writeFileSync(targetPath, JSON.stringify(next, null, 2) + "\n");
+  }
+
+  function readConfig() {
+    return readConfigFromPath(configPath);
+  }
+
+  function writeConfig(next) {
+    writeConfigToPath(configPath, next);
+  }
+
+  function getToken(req) {
+    const raw = String(req.query?.token || "").trim();
+    if (!raw) return null;
+    const safe = raw.replace(/[^a-zA-Z0-9_-]/g, "");
+    if (!safe) return null;
+    return safe;
+  }
+
+  function getTokenConfigPath(token) {
+    if (!token) return null;
+    ensureConfigDir();
+    if (!resolvedConfigDir) return null;
+    return path.join(resolvedConfigDir, `${token}.json`);
+  }
+
+  function isSupabaseEnabled() {
+    return String(process.env.RUNALERT_CONFIG_STORE || "")
+      .trim()
+      .toLowerCase() === "supabase";
+  }
+
+  function getSupabaseKey() {
+    return SUPABASE_SERVICE_KEY || SUPABASE_ANON_KEY;
+  }
+
+  async function supabaseFetch(path, options = {}) {
+    if (typeof fetch !== "function") {
+      throw new Error("global fetch is not available");
+    }
+    const key = getSupabaseKey();
+    if (!SUPABASE_URL || !key) {
+      throw new Error("Supabase env vars missing");
+    }
+    const headers = {
+      apikey: key,
+      Authorization: `Bearer ${key}`,
+      ...options.headers,
+    };
+    return fetch(`${SUPABASE_URL}${path}`, { ...options, headers });
+  }
+
+  async function readConfigFromSupabase(token) {
+    const safe = encodeURIComponent(token);
+    const res = await supabaseFetch(
+      `/rest/v1/${SUPABASE_TABLE}?token=eq.${safe}&select=config`,
+      { headers: { Accept: "application/json" } }
+    );
+    if (!res.ok) {
+      throw new Error(`Supabase GET config ${res.status}`);
+    }
+    const rows = await res.json();
+    if (Array.isArray(rows) && rows.length && rows[0]?.config) {
+      return rows[0].config;
+    }
+    const base = readConfig();
+    await writeConfigToSupabase(token, base);
+    return base;
+  }
+
+  async function writeConfigToSupabase(token, next) {
+    const payload = [
+      {
+        token,
+        config: next,
+        updated_at: new Date().toISOString(),
+      },
+    ];
+    const res = await supabaseFetch(`/rest/v1/${SUPABASE_TABLE}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Prefer: "resolution=merge-duplicates",
+      },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      throw new Error(`Supabase upsert config ${res.status}`);
+    }
+  }
+
+  async function readConfigForToken(token) {
+    if (!token) return readConfig();
+    if (isSupabaseEnabled()) {
+      try {
+        return await readConfigFromSupabase(token);
+      } catch (e) {
+        console.warn("[warn] supabase config read failed:", e?.message || e);
+      }
+    }
+    const tokenPath = getTokenConfigPath(token);
+    if (!tokenPath) return readConfig();
+    if (fs.existsSync(tokenPath)) {
+      return readConfigFromPath(tokenPath);
+    }
+    const base = readConfig();
+    writeConfigToPath(tokenPath, base);
+    return base;
+  }
+
+  async function writeConfigForToken(token, next) {
+    if (!token) return writeConfig(next);
+    if (isSupabaseEnabled()) {
+      try {
+        await writeConfigToSupabase(token, next);
+        return;
+      } catch (e) {
+        console.warn("[warn] supabase config write failed:", e?.message || e);
+      }
+    }
+    const tokenPath = getTokenConfigPath(token);
+    if (!tokenPath) return writeConfig(next);
+    writeConfigToPath(tokenPath, next);
   }
 
   app.get("/health", (_req, res) => res.json({ ok: true }));
 
-  app.get("/config", (_req, res) => {
+  app.get("/config", async (req, res) => {
     try {
-      res.json(readConfig());
+      const token = getToken(req);
+      res.json(await readConfigForToken(token));
     } catch (e) {
       res.status(500).json({ error: e?.message || String(e) });
     }
   });
 
-  app.put("/config", (req, res) => {
+  app.put("/config", async (req, res) => {
     try {
       const next = req.body;
+      const token = getToken(req);
       // minimal validation so you don't brick your file
       if (!next || typeof next !== "object") {
         return res.status(400).json({ error: "config must be an object" });
@@ -105,7 +256,7 @@ function createApp({
         });
       }
 
-      writeConfig(next);
+      await writeConfigForToken(token, next);
       res.json({ ok: true, config: next });
     } catch (e) {
       res.status(500).json({ error: e?.message || String(e) });
@@ -216,6 +367,7 @@ function createApp({
 
   // Lightweight status endpoint for the dashboard streamer tiles.
   // Returns whether each streamer is "active" on Paceman recently, plus run-level isLive.
+  // Also returns twitch-live state (best-effort) for UI indicators.
   // Example: GET /status?names=xQcOW,forsen
   app.get("/status", async (req, res) => {
     try {
@@ -283,6 +435,43 @@ function createApp({
         return null;
       }
 
+      function getWorldSplitMsForClock(world, milestone, clock) {
+        const data = world?.data || {};
+        if (clock === "IGT") {
+          const v = data?.[milestone];
+          return Number.isFinite(v) && v >= 0 ? v : null;
+        }
+        if (clock === "RTA") {
+          const v = data?.[`${milestone}Rta`];
+          return Number.isFinite(v) && v >= 0 ? v : null;
+        }
+        return null;
+      }
+
+      function getLiveSplitMsForClock(liveRun, milestone, clock) {
+        const eventId = LIVE_EVENT_BY_MILESTONE[milestone];
+        if (!eventId) return null;
+        const event = liveRun?.eventList?.find((e) => e?.eventId === eventId);
+        if (!event) return null;
+        if (clock === "IGT") {
+          return Number.isFinite(event?.igt) && event.igt >= 0
+            ? event.igt
+            : null;
+        }
+        if (clock === "RTA") {
+          return Number.isFinite(event?.rta) && event.rta >= 0
+            ? event.rta
+            : null;
+        }
+        return null;
+      }
+
+      function getSplitMsForClock(world, liveRun, milestone, clock) {
+        const worldMs = getWorldSplitMsForClock(world, milestone, clock);
+        if (worldMs != null) return worldMs;
+        return getLiveSplitMsForClock(liveRun, milestone, clock);
+      }
+
       function normalizeNick(value) {
         return String(value || "").trim().toLowerCase();
       }
@@ -342,6 +531,86 @@ function createApp({
         }
       }
 
+      async function getTwitchAppToken() {
+        if (!TWITCH_CLIENT_ID || !TWITCH_CLIENT_SECRET) return null;
+        const cached = cacheGet("twitchAppToken");
+        if (cached?.token && typeof cached?.exp === "number") {
+          // refresh a minute early
+          if (Date.now() < cached.exp - 60_000) return cached.token;
+        }
+
+        try {
+          const tokenUrl =
+            "https://id.twitch.tv/oauth2/token" +
+            `?client_id=${encodeURIComponent(TWITCH_CLIENT_ID)}` +
+            `&client_secret=${encodeURIComponent(TWITCH_CLIENT_SECRET)}` +
+            "&grant_type=client_credentials";
+          const resp = await fetch(tokenUrl, { method: "POST" });
+          if (!resp.ok) return null;
+          const data = await resp.json();
+          const token = data?.access_token;
+          const expiresIn = Number(data?.expires_in) || 3600;
+          if (!token) return null;
+          cacheSet("twitchAppToken", {
+            token,
+            exp: Date.now() + expiresIn * 1000,
+          }, expiresIn * 1000);
+          return token;
+        } catch {
+          return null;
+        }
+      }
+
+      async function fetchTwitchLive(handle) {
+        const raw = String(handle || "").trim();
+        if (!raw) return null;
+        const cacheKey = `twitchLive:${raw.toLowerCase()}`;
+        const cached = cacheGet(cacheKey);
+        if (typeof cached === "boolean") return cached;
+
+        try {
+          const appToken = await getTwitchAppToken();
+          if (TWITCH_CLIENT_ID && appToken) {
+            const helixUrl = `https://api.twitch.tv/helix/streams?user_login=${encodeURIComponent(
+              raw
+            )}`;
+            const helixResp = await fetch(helixUrl, {
+              headers: {
+                "Client-ID": TWITCH_CLIENT_ID,
+                Authorization: `Bearer ${appToken}`,
+              },
+            });
+            if (helixResp.ok) {
+              const data = await helixResp.json();
+              const isLive =
+                Array.isArray(data?.data) && data.data.length > 0;
+              cacheSet(cacheKey, isLive, 60_000);
+              return isLive;
+            }
+          }
+
+          // Fallback: decapi (no-auth). Best-effort only.
+          const url = `https://decapi.me/twitch/stream/${encodeURIComponent(
+            raw
+          )}`;
+          const resp = await fetch(url, {
+            headers: { "User-Agent": "runalert-status" },
+          });
+          const text = await resp.text();
+          if (!resp.ok) return null;
+          const normalized = text.trim().toLowerCase();
+          const isOffline =
+            normalized.includes("offline") ||
+            normalized.includes("not live") ||
+            normalized.includes("not online");
+          const isLive = !isOffline && normalized.length > 0;
+          cacheSet(cacheKey, isLive, 60_000);
+          return isLive;
+        } catch {
+          return null;
+        }
+      }
+
       for (const name of names) {
         const key = `status:${name.toLowerCase()}`;
         const cached = cacheGet(key);
@@ -362,6 +631,9 @@ function createApp({
         let lastMilestoneSource = null;
         let recentFinishUpdatedSec = null;
         let recentFinishMs = null;
+        let splits = null;
+        let twitchLive = null;
+        let twitchHandle = null;
         try {
           if (typeof paceman.getRecentRuns === "function") {
             const runs = await paceman.getRecentRuns(name, 2);
@@ -372,6 +644,11 @@ function createApp({
           }
           if (runId) {
             const world = await paceman.getWorld(runId);
+            twitchHandle =
+              typeof world?.data?.twitch === "string" &&
+              world.data.twitch.trim()
+                ? world.data.twitch.trim()
+                : null;
             isLive = !!world?.isLive;
             // Paceman's isLive is run-level ("in liveruns") and can go false even while a runner is still playing.
             // For a more human-friendly "active" signal, we treat "recently updated" as active.
@@ -407,6 +684,14 @@ function createApp({
             lastMilestone = last.lastMilestone;
             lastMilestoneMs = last.lastMilestoneMs;
             lastMilestoneSource = last.lastMilestoneSource;
+            const splitMap = {};
+            for (const m of CANONICAL_MILESTONES) {
+              splitMap[m] = {
+                igt: getSplitMsForClock(world, liveRun, m, "IGT"),
+                rta: getSplitMsForClock(world, liveRun, m, "RTA"),
+              };
+            }
+            splits = splitMap;
             if (lastMilestoneSource === "live") {
               const liveUpdatedSec = normalizeUpdatedSec(liveRun?.lastUpdated);
               if (liveUpdatedSec != null) lastUpdatedSec = liveUpdatedSec;
@@ -432,6 +717,8 @@ function createApp({
               }
             }
           }
+          const handleForLive = twitchHandle || name;
+          twitchLive = await fetchTwitchLive(handleForLive);
         } catch (e) {
           // Per-name failures should not break the entire response.
           runId = null;
@@ -445,6 +732,8 @@ function createApp({
           lastMilestoneSource = null;
           recentFinishUpdatedSec = null;
           recentFinishMs = null;
+          splits = null;
+          twitchLive = null;
         }
 
         const value = {
@@ -452,11 +741,14 @@ function createApp({
           isLive,
           isActive,
           runIsActive,
+          isTwitchLive: twitchLive === true,
+          twitch: twitchHandle,
           lastUpdatedSec,
           runStartSec,
           lastMilestone,
           lastMilestoneMs,
           lastMilestoneSource,
+          splits,
           recentFinishMs,
           recentFinishUpdatedSec,
         };
@@ -490,11 +782,13 @@ function createApp({
     if (!host) return res.status(400).send("Missing host header.");
     const proto = req.get("x-forwarded-proto") || req.protocol || "https";
     const baseUrl = `${proto}://${host}`;
+    const token = getToken(req);
+    const tokenQuery = token ? `?token=${encodeURIComponent(token)}` : "";
     const repoUrl = process.env.AGENT_REPO_URL || "";
     const script = `#!/bin/bash
 set -euo pipefail
 
-REMOTE_CONFIG_URL="${baseUrl}/config"
+REMOTE_CONFIG_URL="${baseUrl}/config${tokenQuery}"
 RUNALERT_DIR="\${RUNALERT_DIR:-$HOME/runAlert}"
 REPO_URL="${repoUrl}"
 
@@ -554,10 +848,17 @@ echo "✅ runAlert agent installed."
 echo "You can close this window. Notifications will run in the background."
 `;
 
-    res.setHeader(
-      "Content-Disposition",
-      'attachment; filename="runalert-install.command"'
-    );
+    if (String(req.query?.view || "").trim() === "1") {
+      res.setHeader(
+        "Content-Disposition",
+        'inline; filename="runalert-install.command"'
+      );
+    } else {
+      res.setHeader(
+        "Content-Disposition",
+        'attachment; filename="runalert-install.command"'
+      );
+    }
     res.type("text/plain").send(script);
   });
 

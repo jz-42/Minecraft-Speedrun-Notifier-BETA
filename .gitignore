@@ -3,3 +3,11 @@ node_modules
 sent_keys.json
 .cursor/
 runalert-beta/
+configs/*.json
+CONTEXT.md
+.DS_Store
+.env.local
+dist/
+dashboard/dist/
+coverage/
+*.log

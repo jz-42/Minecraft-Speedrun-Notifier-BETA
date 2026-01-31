@@ -4,37 +4,41 @@
   ],
   "clock": "IGT",
   "quietHours": [],
+  "notifications": {
+    "enabled": true,
+    "sound": true
+  },
   "channels": [
     "desktop"
   ],
   "defaultMilestones": {
     "nether": {
-      "thresholdSec": 0,
-      "enabled": false
+      "thresholdSec": 3600,
+      "enabled": true
     },
     "bastion": {
-      "thresholdSec": 0,
-      "enabled": false
+      "thresholdSec": 3600,
+      "enabled": true
     },
     "fortress": {
-      "thresholdSec": 0,
-      "enabled": false
+      "thresholdSec": 3600,
+      "enabled": true
     },
     "first_portal": {
-      "thresholdSec": 0,
-      "enabled": false
+      "thresholdSec": 3600,
+      "enabled": true
     },
     "stronghold": {
-      "thresholdSec": 0,
-      "enabled": false
+      "thresholdSec": 3600,
+      "enabled": true
     },
     "end": {
-      "thresholdSec": 0,
-      "enabled": false
+      "thresholdSec": 3600,
+      "enabled": true
     },
     "finish": {
-      "thresholdSec": 0,
-      "enabled": false
+      "thresholdSec": 3600,
+      "enabled": true
     }
   },
   "profiles": {

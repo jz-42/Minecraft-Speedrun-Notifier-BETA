@@ -19,7 +19,6 @@
 import os from "node:os";
 import path from "node:path";
 import fs from "node:fs";
-import http from "node:http";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import request from "supertest";
 
@@ -35,25 +34,22 @@ function tmpConfigPath() {
 }
 
 async function withLocalServer(app, fn) {
-  // Supertest's "request(app)" binds on 0.0.0.0 by default, which can be blocked in sandboxes.
-  // Bind explicitly to 127.0.0.1 to keep tests portable.
-  const server = http.createServer(app);
-  await new Promise((resolve, reject) => {
-    server.listen(0, "127.0.0.1", (err) => (err ? reject(err) : resolve()));
-  });
-  try {
-    return await fn(request(server));
-  } finally {
-    await new Promise((resolve) => server.close(() => resolve()));
-  }
+  // Avoid binding a real port (blocked in some sandboxes). Supertest can drive the app directly.
+  return await fn(request(app));
 }
 
 describe("api/server", () => {
   let configPath;
+  let configDir;
 
   beforeEach(() => {
     // Each test gets its own temporary config file so tests don't touch your real config.json.
     configPath = tmpConfigPath();
+    configDir = path.join(
+      os.tmpdir(),
+      `runalert-configs-${Date.now()}-${Math.random()}`
+    );
+    fs.mkdirSync(configDir, { recursive: true });
     fs.writeFileSync(
       configPath,
       JSON.stringify(
@@ -82,6 +78,7 @@ describe("api/server", () => {
     // Beginner summary: dashboard boot depends on this returning valid JSON.
     const app = createApp({
       configPath,
+      configDir,
       notifySend: vi.fn(async () => {}),
       paceman: { getRecentRunId: vi.fn(), getWorld: vi.fn() },
     });
@@ -91,10 +88,28 @@ describe("api/server", () => {
     expect(r.body.streamers).toEqual(["xQcOW"]);
   });
 
+  it("GET /config with token creates a per-user config file", async () => {
+    const app = createApp({
+      configPath,
+      configDir,
+      notifySend: vi.fn(async () => {}),
+      paceman: { getRecentRunId: vi.fn(), getWorld: vi.fn() },
+    });
+
+    const token = "testtoken123";
+    const r = await withLocalServer(app, (r) => r.get(`/config?token=${token}`));
+    expect(r.status).toBe(200);
+    expect(r.body.streamers).toEqual(["xQcOW"]);
+
+    const tokenPath = path.join(configDir, `${token}.json`);
+    expect(fs.existsSync(tokenPath)).toBe(true);
+  });
+
   it("PUT /config validates and persists", async () => {
     // Beginner summary: dashboard save depends on this endpoint persisting config.json.
     const app = createApp({
       configPath,
+      configDir,
       notifySend: vi.fn(async () => {}),
       paceman: { getRecentRunId: vi.fn(), getWorld: vi.fn() },
     });
@@ -114,9 +129,40 @@ describe("api/server", () => {
     expect(saved.streamers).toEqual(["xQcOW", "forsen"]);
   });
 
+  it("PUT /config with token writes to per-user file only", async () => {
+    const app = createApp({
+      configPath,
+      configDir,
+      notifySend: vi.fn(async () => {}),
+      paceman: { getRecentRunId: vi.fn(), getWorld: vi.fn() },
+    });
+
+    const token = "user42";
+    const next = {
+      streamers: ["xQcOW", "snoop"],
+      clock: "IGT",
+      quietHours: "00:30-07:15",
+      defaultMilestones: { nether: { thresholdSec: 240, enabled: true } },
+      profiles: {},
+    };
+
+    const r = await withLocalServer(app, (r) =>
+      r.put(`/config?token=${token}`).send(next)
+    );
+    expect(r.status).toBe(200);
+
+    const base = JSON.parse(fs.readFileSync(configPath, "utf8"));
+    expect(base.streamers).toEqual(["xQcOW"]);
+
+    const tokenPath = path.join(configDir, `${token}.json`);
+    const saved = JSON.parse(fs.readFileSync(tokenPath, "utf8"));
+    expect(saved.streamers).toEqual(["xQcOW", "snoop"]);
+  });
+
   it("PUT /config rejects too many streamers", async () => {
     const app = createApp({
       configPath,
+      configDir,
       notifySend: vi.fn(async () => {}),
       paceman: { getRecentRunId: vi.fn(), getWorld: vi.fn() },
     });
@@ -140,6 +186,7 @@ describe("api/server", () => {
     const notifySend = vi.fn(async () => {});
     const app = createApp({
       configPath,
+      configDir,
       notifySend,
       paceman: { getRecentRunId: vi.fn(), getWorld: vi.fn() },
     });
@@ -173,6 +220,7 @@ describe("api/server", () => {
 
     const app = createApp({
       configPath,
+      configDir,
       notifySend: vi.fn(async () => {}),
       paceman,
     });
@@ -214,6 +262,7 @@ describe("api/server", () => {
 
     const app = createApp({
       configPath,
+      configDir,
       notifySend: vi.fn(async () => {}),
       paceman,
     });
@@ -263,6 +312,7 @@ describe("api/server", () => {
 
     const app = createApp({
       configPath,
+      configDir,
       notifySend: vi.fn(async () => {}),
       paceman,
     });
@@ -293,6 +343,7 @@ describe("api/server", () => {
 
     const app = createApp({
       configPath,
+      configDir,
       notifySend: vi.fn(async () => {}),
       paceman,
     });

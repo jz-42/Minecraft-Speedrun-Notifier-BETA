@@ -31,7 +31,31 @@ Env & secrets
 Resetting dedupe
 - To allow re-sending alerts for the same runs while testing, delete or clear `sent_keys.json`.
 
-Notes
-- I (the maintainer) follow a small-diff workflow: make one focused change, run the single-iteration test above, then commit if green. I keep `VISION.md`, `WORKSTYLE.md`, and `TECH_NOTES.md` in mind when making changes.
-
 Next suggested step: add a small CLI helper flag to list configured streamers (`--list-streamers`) for quick checks.
+
+---
+
+# Public Beta (User-Facing)
+
+Beta disclaimer
+- This is a **beta**. Expect bugs and occasional notification delays.
+- Settings are saved **per browser** (token‑based).
+
+Quick usage
+1. Open the dashboard link.
+2. Add streamers and set milestone thresholds.
+3. Enable **Browser alerts** (tab open) for immediate testing.
+4. Install the **Mac agent** to receive background alerts when the tab is closed.
+
+Privacy (high level)
+- No account required.
+- Only saves the configuration you set (streamers + thresholds).
+- No PII required.
+
+Troubleshooting
+- **No browser banners, but sound plays:** macOS may be delivering to Notification Center only. Try System Settings → Notifications → your browser → set to “Alerts”.
+- **Browser alerts not firing:** ensure you clicked “Enable browser alerts (tab open)” and permissions are granted.
+- **Mac installer blocked:** Right-click installer → Open, or allow in System Settings → Privacy & Security.
+- **Live dot seems wrong:** it tracks Twitch live status (not Paceman). Verify Twitch handle and refresh.
+
+If you want, add a custom domain (shorter “via …” line on notifications) and update the public link accordingly.

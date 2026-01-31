@@ -1,17 +1,82 @@
-const API_BASE =
+export const API_BASE =
   typeof import.meta.env.VITE_API_BASE === "string" &&
   import.meta.env.VITE_API_BASE.trim().length > 0
     ? import.meta.env.VITE_API_BASE
     : "";
 
+const TOKEN_STORAGE_KEY = "runalert-token";
+let cachedToken: string | null = null;
+
+function generateToken() {
+  const bytes = new Uint8Array(16);
+  if (globalThis.crypto?.getRandomValues) {
+    globalThis.crypto.getRandomValues(bytes);
+  } else {
+    for (let i = 0; i < bytes.length; i += 1) {
+      bytes[i] = Math.floor(Math.random() * 256);
+    }
+  }
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+function readTokenFromUrl(): string | null {
+  try {
+    if (typeof window === "undefined") return null;
+    const raw = new URLSearchParams(window.location.search).get("token");
+    const token = raw?.trim();
+    return token ? token : null;
+  } catch {
+    return null;
+  }
+}
+
+export function getToken() {
+  if (cachedToken) return cachedToken;
+  if (typeof window === "undefined") return "";
+
+  const urlToken = readTokenFromUrl();
+  if (urlToken) {
+    cachedToken = urlToken;
+    try {
+      window.localStorage.setItem(TOKEN_STORAGE_KEY, urlToken);
+    } catch {
+      // ignore storage failures
+    }
+    return cachedToken;
+  }
+
+  try {
+    const stored = window.localStorage.getItem(TOKEN_STORAGE_KEY);
+    if (stored && stored.trim()) {
+      cachedToken = stored.trim();
+      return cachedToken;
+    }
+  } catch {
+    // ignore storage failures
+  }
+
+  cachedToken = generateToken();
+  try {
+    window.localStorage.setItem(TOKEN_STORAGE_KEY, cachedToken);
+  } catch {
+    // ignore storage failures
+  }
+  return cachedToken;
+}
+
+function configUrl() {
+  const token = getToken();
+  return `${API_BASE}/config${token ? `?token=${encodeURIComponent(token)}` : ""}`;
+}
+
 export async function getConfig() {
-  const r = await fetch(`${API_BASE}/config`);
+  const r = await fetch(configUrl());
   if (!r.ok) throw new Error(`GET /config ${r.status}`);
   return r.json();
 }
 
 export async function putConfig(cfg: unknown) {
-  const r = await fetch(`${API_BASE}/config`, {
+  const r = await fetch(configUrl(), {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(cfg),
@@ -97,6 +162,7 @@ export async function getStatuses(names: string[]) {
         runStartSec?: number | null;
         lastMilestone?: string | null;
         lastMilestoneMs?: number | null;
+        splits?: Record<string, { igt?: number | null; rta?: number | null }>;
         recentFinishMs?: number | null;
         recentFinishUpdatedSec?: number | null;
       }

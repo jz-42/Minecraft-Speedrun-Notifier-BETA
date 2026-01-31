@@ -2,7 +2,15 @@ import "./App.css";
 
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
-import { getConfig, getProfiles, getStatuses, putConfig } from "./api";
+import {
+  API_BASE,
+  getConfig,
+  getProfiles,
+  getStatuses,
+  getToken,
+  testNotify,
+  putConfig,
+} from "./api";
 import { CANONICAL_MILESTONES, milestoneLabel } from "./config";
 
 type MilestoneCfg = { thresholdSec?: number; enabled?: boolean };
@@ -13,6 +21,10 @@ type Config = {
   quietHours?: string | string[];
   profiles?: Record<string, Record<string, MilestoneCfg>>;
   defaultMilestones?: Record<string, MilestoneCfg>;
+  notifications?: {
+    enabled?: boolean;
+    sound?: boolean;
+  };
 };
 
 function clampInt(n: number, min: number, max: number) {
@@ -29,10 +41,12 @@ function splitMMSS(thresholdSec?: number): { mm: string; ss: string } {
   return { mm: String(mm), ss: String(ss).padStart(2, "0") };
 }
 
-const APP_VERSION = "0.9.0";
+const APP_VERSION = "0.1";
 const APP_CHANNEL = "Beta";
 const MAX_STREAMERS = 15;
 const MAX_QUIET_SPANS = 3;
+const BROWSER_ALERTS_KEY = "runalert-browser-alerts";
+const BROWSER_ALERTS_DEDUPE_KEY = "runalert-browser-alerts-dedupe";
 
 type AmPm = "AM" | "PM";
 type Time12 = { hh: string; mm: string; ampm: AmPm };
@@ -60,6 +74,30 @@ function parseHHMM(s: string): { hh: number; mm: number } | null {
   if (hh < 0 || hh > 23) return null;
   if (mm < 0 || mm > 59) return null;
   return { hh, mm };
+}
+
+function isTimeInQuietRange(range: string, date = new Date()): boolean {
+  const parts = String(range || "").split("-");
+  if (parts.length !== 2) return false;
+  const start = parseHHMM(parts[0]);
+  const end = parseHHMM(parts[1]);
+  if (!start || !end) return false;
+
+  const now = date.getHours() * 60 + date.getMinutes();
+  const startMin = start.hh * 60 + start.mm;
+  const endMin = end.hh * 60 + end.mm;
+
+  if (startMin === endMin) return true;
+  if (startMin < endMin) return now >= startMin && now < endMin;
+  return now >= startMin || now < endMin;
+}
+
+function inQuietHours(q: Config["quietHours"], date = new Date()): boolean {
+  const ranges = normalizeQuietHoursToArray(q);
+  for (const r of ranges) {
+    if (isTimeInQuietRange(r, date)) return true;
+  }
+  return false;
 }
 
 function to12({ hh, mm }: { hh: number; mm: number }): Time12 {
@@ -120,10 +158,19 @@ function defaultQuietSpan(): QuietSpanDraft {
 function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [showQuietHours, setShowQuietHours] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
+  const [installCopied, setInstallCopied] = useState(false);
 
   const [draft, setDraft] = useState<Record<string, MilestoneCfg>>({});
   const [saving, setSaving] = useState(false);
+  const [testStatus, setTestStatus] = useState<
+    "idle" | "sending" | "success" | "error"
+  >("idle");
+  const [browserAlertsEnabled, setBrowserAlertsEnabled] = useState(false);
+  const [browserAlertsErr, setBrowserAlertsErr] = useState<string | null>(null);
+  const [allToggleOn, setAllToggleOn] = useState(true);
+  const [allToggleOwner, setAllToggleOwner] = useState<string | null>(null);
 
   const [cfg, setCfg] = useState<Config | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -138,6 +185,8 @@ function App() {
         isLive: boolean;
         isActive?: boolean;
         runIsActive?: boolean;
+        isTwitchLive?: boolean;
+        twitch?: string | null;
         lastMilestone?: string | null;
         lastMilestoneMs?: number | null;
         lastUpdatedSec?: number | null;
@@ -149,13 +198,229 @@ function App() {
   >({});
   const [statusErr, setStatusErr] = useState<string | null>(null);
   const [profileByName, setProfileByName] = useState<
-    Record<string, { avatarUrl: string | null }>
+    Record<string, { avatarUrl: string | null; twitch?: string | null }>
   >({});
 
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hydratingDraftRef = useRef(false);
   const queuedSaveRef = useRef(false);
   const statusPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const browserAlertDedupeRef = useRef<
+    Record<string, { runId: number | null; milestones: Record<string, boolean> }>
+  >({});
+
+  const installToken = getToken();
+  const origin =
+    typeof window !== "undefined" && window.location?.origin
+      ? window.location.origin
+      : "";
+  const installBase = API_BASE || origin;
+  const installUrl = `${installBase}/install/macos.command${
+    installToken ? `?token=${encodeURIComponent(installToken)}` : ""
+  }`;
+  const viewInstallUrl = `${installUrl}${
+    installUrl.includes("?") ? "&" : "?"
+  }view=1`;
+  const installCommand = `curl -fsSL "${viewInstallUrl}" | bash`;
+
+  const milestoneEntries = Object.entries(draft);
+  const anyMilestones = milestoneEntries.length > 0;
+  const allEnabled =
+    anyMilestones && milestoneEntries.every(([, cfg]) => cfg.enabled ?? true);
+  const anyEnabled = milestoneEntries.some(([, cfg]) => cfg.enabled ?? true);
+  const notificationsEnabled = cfg?.notifications?.enabled ?? true;
+  const notificationSoundEnabled = cfg?.notifications?.sound ?? true;
+
+  function getTwitchUrl(name: string) {
+    const raw =
+      profileByName[name]?.twitch || statusByName?.[name]?.twitch || name;
+    const handle = String(raw || "").trim();
+    if (!handle) return null;
+    return `https://twitch.tv/${encodeURIComponent(handle)}`;
+  }
+
+  function getPacemanStatsUrl(name: string) {
+    const handle = String(name || "").trim();
+    if (!handle) return null;
+    return `https://paceman.gg/stats/player/${encodeURIComponent(handle)}/runs/`;
+  }
+
+  function isStreamerLive(name: string): boolean {
+    const s = statusByName?.[name];
+    return s?.isTwitchLive === true;
+  }
+
+  async function copyInstallCommand() {
+    try {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(installCommand);
+        setInstallCopied(true);
+        setTimeout(() => setInstallCopied(false), 1800);
+        return;
+      }
+    } catch {
+      // fall through to manual prompt
+    }
+    window.prompt("Copy this command:", installCommand);
+  }
+
+  function persistBrowserAlerts(enabled: boolean) {
+    setBrowserAlertsEnabled(enabled);
+    try {
+      window.localStorage.setItem(BROWSER_ALERTS_KEY, String(enabled));
+    } catch {
+      // ignore storage failures
+    }
+  }
+
+  async function enableBrowserAlerts() {
+    setBrowserAlertsErr(null);
+    if (typeof Notification === "undefined") {
+      setBrowserAlertsErr("Browser notifications are not supported here.");
+      return;
+    }
+    if (Notification.permission === "granted") {
+      persistBrowserAlerts(true);
+      return;
+    }
+    if (Notification.permission === "denied") {
+      setBrowserAlertsErr(
+        "Notifications are blocked in this browser. Enable them in browser settings."
+      );
+      return;
+    }
+    const perm = await Notification.requestPermission();
+    if (perm === "granted") {
+      persistBrowserAlerts(true);
+    } else {
+      setBrowserAlertsErr("Notification permission was denied.");
+    }
+  }
+
+  function disableBrowserAlerts() {
+    setBrowserAlertsErr(null);
+    persistBrowserAlerts(false);
+  }
+
+  function loadBrowserAlertDedupe() {
+    try {
+      const raw = window.localStorage.getItem(BROWSER_ALERTS_DEDUPE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === "object") {
+        browserAlertDedupeRef.current = parsed;
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  function saveBrowserAlertDedupe() {
+    try {
+      window.localStorage.setItem(
+        BROWSER_ALERTS_DEDUPE_KEY,
+        JSON.stringify(browserAlertDedupeRef.current)
+      );
+    } catch {
+      // ignore
+    }
+  }
+
+  function getDedupeEntry(name: string, runId: number) {
+    const cur = browserAlertDedupeRef.current[name];
+    if (!cur || cur.runId !== runId) {
+      browserAlertDedupeRef.current[name] = {
+        runId,
+        milestones: {},
+      };
+    }
+    return browserAlertDedupeRef.current[name];
+  }
+
+  function shouldNotifyBrowserAlert(
+    name: string,
+    milestone: string,
+    ms: number | null | undefined
+  ) {
+    if (!cfg) return false;
+    if (!Number.isFinite(ms) || (ms as number) < 0) return false;
+    const merged = getMilestonesForStreamer(name)[milestone];
+    if (!merged || !merged.enabled) return false;
+    const thresholdSec = merged.thresholdSec;
+    if (!Number.isFinite(thresholdSec) || (thresholdSec as number) <= 0)
+      return false;
+    return (ms as number) <= (thresholdSec as number) * 1000;
+  }
+
+  function maybeSendBrowserAlerts(statuses: Record<string, any>) {
+    if (!cfg || !browserAlertsEnabled) return;
+    if (!notificationsEnabled) return;
+    if (typeof Notification === "undefined") return;
+    if (Notification.permission !== "granted") return;
+    if (inQuietHours(cfg.quietHours)) return;
+
+    const clock = String(cfg.clock || "IGT").toUpperCase();
+    const clockKey = clock === "RTA" ? "rta" : "igt";
+
+    for (const name of cfg.streamers ?? []) {
+      const status = statuses?.[name];
+      if (!status?.runId || status?.runIsActive !== true) continue;
+      const splits = status?.splits;
+      if (!splits || typeof splits !== "object") continue;
+
+      const entry = getDedupeEntry(name, status.runId);
+      for (const milestone of CANONICAL_MILESTONES) {
+        const ms = splits?.[milestone]?.[clockKey];
+        if (!shouldNotifyBrowserAlert(name, milestone, ms)) continue;
+        if (entry.milestones?.[milestone]) continue;
+
+        const time = formatRunTime(ms) ?? "—";
+        const label = milestoneBadgeText(milestone);
+        const emoji = milestoneEmoji(milestone);
+        const title = `${label}${emoji ? ` ${emoji}` : ""} — ${time} (${name})`;
+        const streamUrl = getTwitchUrl(name);
+        try {
+          const notify = new Notification(title, {
+            tag: `${name}-${milestone}-${status.runId}`,
+            requireInteraction: true,
+            silent: !notificationSoundEnabled,
+          });
+          if (streamUrl) {
+            notify.onclick = () => {
+              try {
+                const tab = window.open(streamUrl, `runalert-stream-${name}`);
+                tab?.focus?.();
+              } catch {
+                // ignore
+              }
+              try {
+                notify.close();
+              } catch {
+                // ignore
+              }
+            };
+          }
+        } catch {
+          // ignore
+        }
+        entry.milestones[milestone] = true;
+        saveBrowserAlertDedupe();
+      }
+    }
+  }
+
+  async function sendTestNotification() {
+    if (testStatus === "sending") return;
+    setTestStatus("sending");
+    try {
+      await testNotify("runAlert test", "Agent is connected and ready.");
+      setTestStatus("success");
+      setTimeout(() => setTestStatus("idle"), 2500);
+    } catch {
+      setTestStatus("error");
+      setTimeout(() => setTestStatus("idle"), 3500);
+    }
+  }
 
   function openQuietHoursEditor() {
     if (!cfg) {
@@ -392,6 +657,12 @@ function App() {
       setErr("Config not loaded yet.");
       return;
     }
+    if (
+      typeof window !== "undefined" &&
+      !window.confirm(`Remove ${name}?`)
+    ) {
+      return;
+    }
 
     // Optimistic UI update
     const optimistic: Config = structuredClone(cfg);
@@ -431,6 +702,37 @@ function App() {
       .catch((e) => setErr(e?.message ?? String(e)));
   }, []);
 
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(BROWSER_ALERTS_KEY);
+      if (raw === "true") {
+        if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+          setBrowserAlertsEnabled(true);
+        } else if (
+          typeof Notification !== "undefined" &&
+          Notification.permission === "denied"
+        ) {
+          setBrowserAlertsErr(
+            "Notifications are blocked in this browser. Enable them in browser settings."
+          );
+        }
+      }
+    } catch {
+      // ignore
+    }
+    loadBrowserAlertDedupe();
+  }, []);
+
+  useEffect(() => {
+    if (!selected || !anyMilestones) return;
+    if (selected !== allToggleOwner) {
+      setAllToggleOwner(selected);
+      setAllToggleOn(allEnabled);
+    }
+  }, [selected, allEnabled, anyMilestones, allToggleOwner]);
+
+  // (no inline toast fallback)
+
   // Fetch streamer profile info (avatar URLs). Cached heavily server-side.
   useEffect(() => {
     if (!cfg) return;
@@ -451,6 +753,7 @@ function App() {
         const names = cfg?.streamers ?? [];
         const r = await getStatuses(names);
         setStatusByName(r.statuses ?? {});
+        maybeSendBrowserAlerts(r.statuses ?? {});
         setStatusErr(null);
       } catch {
         // Best-effort: don't spam errors for status polling.
@@ -607,6 +910,34 @@ function App() {
     }
   }
 
+  function milestoneEmoji(milestone: string): string | null {
+    switch (milestone) {
+      case "nether":
+        return "🔥";
+      case "bastion":
+        return "🟨🐷";
+      case "fortress":
+        return "🏰🧱";
+      case "first_portal":
+        return "🌀✨";
+      case "stronghold":
+        return "👁️";
+      case "end":
+        return "🐉";
+      case "finish":
+        return "👑";
+      default:
+        return null;
+    }
+  }
+
+  function milestoneEnteredLabel(milestone: string): string {
+    const label = milestoneBadgeText(milestone);
+    if (milestone === "first_portal") return label;
+    if (milestone === "finish") return label;
+    return `Entered ${label}`;
+  }
+
   function formatRunTime(ms?: number | null): string | null {
     if (ms == null || !Number.isFinite(ms) || ms < 0) return null;
     const totalSec = Math.floor(ms / 1000);
@@ -625,7 +956,10 @@ function App() {
     if (min < 60) return `${min}m ago`;
     const hr = Math.floor(min / 60);
     const rem = min % 60;
-    return `${hr}h ${rem}m ago`;
+    if (hr < 24) return `${hr}h ${rem}m ago`;
+    const days = Math.floor(hr / 24);
+    const remH = hr % 24;
+    return remH > 0 ? `${days}d ${remH}h ago` : `${days}d ago`;
   }
 
   function getBadgeData(name: string): {
@@ -694,6 +1028,20 @@ function App() {
       .join(" • ");
   }
 
+  function subtitleFor(name: string): string | null {
+    const s = statusByName[name];
+    const badge = getBadgeData(name);
+    if (!s) return null;
+    if (badge) return badgeTitleFor(name);
+
+    const nowSec = Math.floor(Date.now() / 1000);
+    if (typeof s.lastUpdatedSec === "number") {
+      const ago = formatAgo(Math.max(0, nowSec - s.lastUpdatedSec));
+      return ago ? `Last update • ${ago}` : null;
+    }
+    return null;
+  }
+
   return (
     <div className="page">
       <div className="frame" data-testid="header-frame">
@@ -727,6 +1075,9 @@ function App() {
                   >
                     Quiet Hours: {quietHoursSummary}
                   </button>
+                </div>
+                <div className="betaDisclaimer">
+                  Beta preview: possible bugs. Settings are saved per browser.
                 </div>
               </div>
             </div>
@@ -779,7 +1130,20 @@ function App() {
                 alignItems: "center",
               }}
             >
-              <div style={{ fontSize: 26, fontWeight: 700 }}>{selected}</div>
+              <a
+                className={`label labelLink labelRow panelName ${
+                  isStreamerLive(selected) ? "labelLive" : ""
+                }`}
+                href={getTwitchUrl(selected) ?? undefined}
+                target="_blank"
+                rel="noreferrer"
+                title="Open stream"
+              >
+                <span>{selected}</span>
+                {isStreamerLive(selected) ? (
+                  <span className="liveDot on" aria-hidden="true" />
+                ) : null}
+              </a>
               <div style={{ display: "flex", gap: 10 }}>
                 <button
                   onClick={() => removeStreamer(selected)}
@@ -806,6 +1170,30 @@ function App() {
               </a>{" "}
               split times can drift vs in-VOD IGT. Add a small buffer (about a
               minute) to your thresholds for safety.
+            </div>
+
+            <div className="milestoneAllRow">
+              <div>All milestones</div>
+              <label className="milestoneAllToggle">
+                <input
+                  type="checkbox"
+                  checked={allToggleOn}
+                  disabled={!anyMilestones}
+                  onChange={(e) => {
+                    if (!anyMilestones) return;
+                    const nextEnabled = e.target.checked;
+                    setAllToggleOn(nextEnabled);
+                    setDraft((d) => {
+                      const next = { ...d };
+                      for (const key of Object.keys(next)) {
+                        next[key] = { ...next[key], enabled: nextEnabled };
+                      }
+                      return next;
+                    });
+                  }}
+                />
+                {allToggleOn ? "all on" : "all off"}
+              </label>
             </div>
 
             <div style={{ marginTop: 10, display: "grid", gap: 8 }}>
@@ -1020,10 +1408,29 @@ function App() {
                   </span>
                 ) : null}
               </button>
-              <div className="label">{name}</div>
-              {getBadgeData(name) ? (
-                <div className="milestoneSubtitle">{badgeTitleFor(name)}</div>
-              ) : null}
+              <a
+                className={`label labelLink labelRow ${
+                  isStreamerLive(name) ? "labelLive" : ""
+                }`}
+                href={getTwitchUrl(name) ?? undefined}
+                target="_blank"
+                rel="noreferrer"
+                title="Open stream"
+              >
+                <span>{name}</span>
+                {isStreamerLive(name) ? (
+                  <span className="liveDot on" aria-hidden="true" />
+                ) : null}
+              </a>
+              <a
+                className="milestoneSubtitle milestoneLink"
+                href={getPacemanStatsUrl(name) ?? undefined}
+                target="_blank"
+                rel="noreferrer"
+                title="Open stats"
+              >
+                {subtitleFor(name) ?? "Last update • —"}
+              </a>
             </div>
           ))}
 
@@ -1047,18 +1454,97 @@ function App() {
               Keep alerts running in the background even after you close this
               tab.
             </div>
+            <div className="installMeta">
+              <a
+                className="installLink"
+                href={viewInstallUrl}
+                target="_blank"
+                rel="noreferrer"
+              >
+                View what you're installing
+              </a>{" "}
+              — plain Bash script that clones the public{" "}
+              <a
+                className="installLink"
+                href="https://github.com/jz-42/Minecraft-Speedrun-Notifier-BETA"
+                target="_blank"
+                rel="noreferrer"
+              >
+                git repo
+              </a>{" "}
+              and runs the watcher (no bitcoin miner).
+            </div>
+            <div className="installNotice">
+              Browser alerts work only while this tab stays open. Install the
+              Mac agent for background alerts when the tab is closed.
+            </div>
+            <div className="browserAlertRow">
+              <button
+                className="browserAlertBtn"
+                type="button"
+                onClick={() =>
+                  browserAlertsEnabled ? disableBrowserAlerts() : enableBrowserAlerts()
+                }
+              >
+                {browserAlertsEnabled
+                  ? "Browser alerts enabled"
+                  : "Enable browser alerts (tab open)"}
+              </button>
+              <span className="browserAlertHint">
+                {notificationsEnabled ? "Tab open only" : "Muted in Settings"}
+              </span>
+            </div>
+            {browserAlertsErr ? (
+              <div className="browserAlertError">{browserAlertsErr}</div>
+            ) : null}
             <div className="installSteps">
+              <strong>Option A (Finder)</strong>
+              <br />
               1. Download the installer
               <br />
-              2. Double-click it in Finder
+              2. Right-click it → Open
               <br />
-              3. Follow the prompts
+              3. If blocked: System Settings → Privacy &amp; Security → Open
+              Anyway
+            </div>
+            <div className="installSteps">
+              <strong>Option B (Terminal)</strong>
+              <br />
+              Copy/paste this to bypass Finder prompts:
+            </div>
+            <div className="installCommandRow">
+              <button
+                className="installCopy"
+                type="button"
+                onClick={copyInstallCommand}
+              >
+                {installCopied ? "Copied" : "Copy terminal command"}
+              </button>
+              <span className="installCommandHint">Same installer, fewer prompts</span>
+            </div>
+            <div className="installCommand">{installCommand}</div>
+            <div className="installTestRow">
+              <button
+                className="installTest"
+                type="button"
+                onClick={sendTestNotification}
+                disabled={testStatus === "sending"}
+              >
+                {testStatus === "sending" ? "Sending…" : "Send test notification"}
+              </button>
+              <span className="installTestHint">
+                {testStatus === "success"
+                  ? "Sent! Check your desktop notifications."
+                  : testStatus === "error"
+                    ? "No agent detected yet."
+                    : "Use this after install to verify it works."}
+              </span>
             </div>
           </div>
           <div className="installActions">
             <a
               className="installButton"
-              href="/install/macos.command"
+              href={installUrl}
               download
             >
               Download Mac Installer
@@ -1142,7 +1628,109 @@ function App() {
                 >
                   Quiet Hours
                 </button>
-                <button style={settingsRowStyle}>Notification Type</button>
+                <button
+                  style={settingsRowStyle}
+                  onClick={() => {
+                    setShowSettings(false);
+                    setShowNotifications(true);
+                  }}
+                >
+                  Notifications
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {showNotifications ? (
+          <div
+            className="qhOverlay"
+            onClick={() => setShowNotifications(false)}
+          >
+            <div
+              className="qhModal"
+              onClick={(e) => e.stopPropagation()}
+              role="dialog"
+              aria-label="Notifications"
+            >
+              <div className="qhHeader">
+                <div>
+                  <div className="qhTitle">Notifications</div>
+                  <div className="qhHelp">
+                    Control whether runAlert shows browser notifications and
+                    plays the alert sound.
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="iconBtn"
+                  aria-label="Close notifications"
+                  style={{ width: 46, height: 46 }}
+                  onClick={() => setShowNotifications(false)}
+                >
+                  <svg
+                    className="iconSvg close"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                  >
+                    <path
+                      fill="currentColor"
+                      d="M18.3 5.71a1 1 0 0 0-1.41 0L12 10.59 7.11 5.7A1 1 0 1 0 5.7 7.11L10.59 12 5.7 16.89a1 1 0 1 0 1.41 1.41L12 13.41l4.89 4.89a1 1 0 0 0 1.41-1.41L13.41 12l4.89-4.89a1 1 0 0 0 0-1.4Z"
+                    />
+                  </svg>
+                </button>
+              </div>
+
+              <div className="notifBody">
+                <label className="notifRow">
+                  <span>Enable notifications</span>
+                  <input
+                    type="checkbox"
+                    checked={notificationsEnabled}
+                    onChange={(e) => {
+                      const next = e.target.checked;
+                      if (!cfg) return;
+                      const updated = structuredClone(cfg);
+                      updated.notifications = {
+                        ...(updated.notifications || {}),
+                        enabled: next,
+                        sound:
+                          updated.notifications?.sound ??
+                          notificationSoundEnabled,
+                      };
+                      setCfg(updated);
+                      setErr(null);
+                      void putConfig(updated).catch((e) =>
+                        setErr(e?.message ?? String(e))
+                      );
+                    }}
+                  />
+                </label>
+                <label className="notifRow">
+                  <span>Notification sound</span>
+                  <input
+                    type="checkbox"
+                    checked={notificationSoundEnabled}
+                    disabled={!notificationsEnabled}
+                    onChange={(e) => {
+                      const next = e.target.checked;
+                      if (!cfg) return;
+                      const updated = structuredClone(cfg);
+                      updated.notifications = {
+                        ...(updated.notifications || {}),
+                        enabled:
+                          updated.notifications?.enabled ??
+                          notificationsEnabled,
+                        sound: next,
+                      };
+                      setCfg(updated);
+                      setErr(null);
+                      void putConfig(updated).catch((e) =>
+                        setErr(e?.message ?? String(e))
+                      );
+                    }}
+                  />
+                </label>
               </div>
             </div>
           </div>

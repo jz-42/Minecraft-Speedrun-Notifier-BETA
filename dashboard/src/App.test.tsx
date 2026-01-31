@@ -67,21 +67,21 @@ describe("App", () => {
     expect(await screen.findByTestId("header-quietHours")).toBeTruthy();
   });
 
-  it("add streamer uses default milestones (disabled by default)", async () => {
+  it("add streamer uses default milestones (1 hour for debugging)", async () => {
     // Critical: New streamers should inherit defaultMilestones from config.
-    // Defaults are disabled with 00:00 for new streamers.
+    // For debugging, all defaults are set to 3600 seconds (1 hour).
     const initialCfg: any = {
       streamers: ["xQcOW"],
       clock: "IGT",
       quietHours: [],
       defaultMilestones: {
-        nether: { thresholdSec: 0, enabled: false },
-        bastion: { thresholdSec: 0, enabled: false },
-        fortress: { thresholdSec: 0, enabled: false },
-        first_portal: { thresholdSec: 0, enabled: false },
-        stronghold: { thresholdSec: 0, enabled: false },
-        end: { thresholdSec: 0, enabled: false },
-        finish: { thresholdSec: 0, enabled: false },
+        nether: { thresholdSec: 3600, enabled: true },
+        bastion: { thresholdSec: 3600, enabled: true },
+        fortress: { thresholdSec: 3600, enabled: true },
+        first_portal: { thresholdSec: 3600, enabled: true },
+        stronghold: { thresholdSec: 3600, enabled: true },
+        end: { thresholdSec: 3600, enabled: true },
+        finish: { thresholdSec: 3600, enabled: true },
       },
       profiles: {},
     };
@@ -91,11 +91,11 @@ describe("App", () => {
     globalThis.fetch = vi.fn(async (url: string, init?: any) => {
       const u = String(url);
       const method = String(init?.method || "GET").toUpperCase();
-      if (u.endsWith("/config") && method === "PUT") {
+      if (u.includes("/config") && method === "PUT") {
         savedCfg = JSON.parse(init.body);
         return { ok: true, status: 200, json: async () => ({ ok: true }) };
       }
-      if (u.endsWith("/config") && method === "GET") {
+      if (u.includes("/config") && method === "GET") {
         return { ok: true, status: 200, json: async () => savedCfg };
       }
       return { ok: true, status: 200, json: async () => ({ ok: true }) };
@@ -131,9 +131,9 @@ describe("App", () => {
     expect(newStreamerBtn).toBeTruthy();
     fireEvent.click(newStreamerBtn!);
 
-    // Check that milestones show 00:00 (disabled defaults)
+    // Check that milestones show 60:00 (3600 seconds = 1 hour)
     const netherMinutes = await screen.findByLabelText("nether-minutes");
-    expect((netherMinutes as HTMLInputElement).value).toBe("00");
+    expect((netherMinutes as HTMLInputElement).value).toBe("60");
     const netherSeconds = await screen.findByLabelText("nether-seconds");
     expect((netherSeconds as HTMLInputElement).value).toBe("00");
   });
@@ -208,11 +208,11 @@ describe("App", () => {
     globalThis.fetch = vi.fn(async (url: string, init?: any) => {
       const u = String(url);
       const method = String(init?.method || "GET").toUpperCase();
-      if (u.endsWith("/config") && method === "PUT") {
+      if (u.includes("/config") && method === "PUT") {
         savedCfg = JSON.parse(init.body);
         return { ok: true, status: 200, json: async () => ({ ok: true }) };
       }
-      if (u.endsWith("/config") && method === "GET") {
+      if (u.includes("/config") && method === "GET") {
         return { ok: true, status: 200, json: async () => savedCfg };
       }
       // profiles/status best-effort
@@ -321,10 +321,10 @@ describe("App", () => {
     globalThis.fetch = vi.fn(async (url: string, init?: any) => {
       const u = String(url);
       const method = String(init?.method || "GET").toUpperCase();
-      if (u.endsWith("/config") && method === "GET") {
+      if (u.includes("/config") && method === "GET") {
         return { ok: true, status: 200, json: async () => initialCfg };
       }
-      if (u.endsWith("/config") && method === "PUT") {
+      if (u.includes("/config") && method === "PUT") {
         putCalls++;
         return { ok: true, status: 200, json: async () => ({ ok: true }) };
       }
@@ -379,10 +379,10 @@ describe("App", () => {
     globalThis.fetch = vi.fn(async (url: string, init?: any) => {
       const u = String(url);
       const method = String(init?.method || "GET").toUpperCase();
-      if (u.endsWith("/config") && method === "GET") {
+      if (u.includes("/config") && method === "GET") {
         return { ok: true, status: 200, json: async () => initialCfg };
       }
-      if (u.endsWith("/config") && method === "PUT") {
+      if (u.includes("/config") && method === "PUT") {
         putCalls++;
         return { ok: true, status: 200, json: async () => ({ ok: true }) };
       }
@@ -438,11 +438,11 @@ describe("App", () => {
     globalThis.fetch = vi.fn(async (url: string, init?: any) => {
       const u = String(url);
       const method = String(init?.method || "GET").toUpperCase();
-      if (u.endsWith("/config") && method === "PUT") {
+      if (u.includes("/config") && method === "PUT") {
         savedCfg = JSON.parse(init.body);
         return { ok: true, status: 200, json: async () => ({ ok: true }) };
       }
-      if (u.endsWith("/config") && method === "GET") {
+      if (u.includes("/config") && method === "GET") {
         return { ok: true, status: 200, json: async () => savedCfg };
       }
       return { ok: true, status: 200, json: async () => ({ ok: true }) };
@@ -522,11 +522,11 @@ describe("App", () => {
     globalThis.fetch = vi.fn(async (url: string, init?: any) => {
       const u = String(url);
       const method = String(init?.method || "GET").toUpperCase();
-      if (u.endsWith("/config") && method === "PUT") {
+      if (u.includes("/config") && method === "PUT") {
         savedCfg = JSON.parse(init.body);
         return { ok: true, status: 200, json: async () => ({ ok: true }) };
       }
-      if (u.endsWith("/config") && method === "GET") {
+      if (u.includes("/config") && method === "GET") {
         return { ok: true, status: 200, json: async () => savedCfg };
       }
       return { ok: true, status: 200, json: async () => ({ ok: true }) };
@@ -582,11 +582,11 @@ describe("App", () => {
     globalThis.fetch = vi.fn(async (url: string, init?: any) => {
       const u = String(url);
       const method = String(init?.method || "GET").toUpperCase();
-      if (u.endsWith("/config") && method === "PUT") {
+      if (u.includes("/config") && method === "PUT") {
         savedCfg = JSON.parse(init.body);
         return { ok: true, status: 200, json: async () => ({ ok: true }) };
       }
-      if (u.endsWith("/config") && method === "GET") {
+      if (u.includes("/config") && method === "GET") {
         return { ok: true, status: 200, json: async () => savedCfg };
       }
       return { ok: true, status: 200, json: async () => ({ ok: true }) };
@@ -625,7 +625,7 @@ describe("App", () => {
     globalThis.fetch = vi.fn(async (url: string, init?: any) => {
       const u = String(url);
       const method = String(init?.method || "GET").toUpperCase();
-      if (u.endsWith("/config") && method === "GET") {
+      if (u.includes("/config") && method === "GET") {
         return { ok: true, status: 200, json: async () => cfg };
       }
       return { ok: true, status: 200, json: async () => ({ ok: true }) };
@@ -664,11 +664,11 @@ describe("App", () => {
     globalThis.fetch = vi.fn(async (url: string, init?: any) => {
       const u = String(url);
       const method = String(init?.method || "GET").toUpperCase();
-      if (u.endsWith("/config") && method === "PUT") {
+      if (u.includes("/config") && method === "PUT") {
         savedCfg = JSON.parse(init.body);
         return { ok: true, status: 200, json: async () => ({ ok: true }) };
       }
-      if (u.endsWith("/config") && method === "GET") {
+      if (u.includes("/config") && method === "GET") {
         return { ok: true, status: 200, json: async () => savedCfg };
       }
       return { ok: true, status: 200, json: async () => ({ ok: true }) };
@@ -722,11 +722,11 @@ describe("App", () => {
     globalThis.fetch = vi.fn(async (url: string, init?: any) => {
       const u = String(url);
       const method = String(init?.method || "GET").toUpperCase();
-      if (u.endsWith("/config") && method === "PUT") {
+      if (u.includes("/config") && method === "PUT") {
         savedCfg = JSON.parse(init.body);
         return { ok: true, status: 200, json: async () => ({ ok: true }) };
       }
-      if (u.endsWith("/config") && method === "GET") {
+      if (u.includes("/config") && method === "GET") {
         return { ok: true, status: 200, json: async () => savedCfg };
       }
       return { ok: true, status: 200, json: async () => ({ ok: true }) };
@@ -828,11 +828,11 @@ describe("App", () => {
     globalThis.fetch = vi.fn(async (url: string, init?: any) => {
       const u = String(url);
       const method = String(init?.method || "GET").toUpperCase();
-      if (u.endsWith("/config") && method === "PUT") {
+      if (u.includes("/config") && method === "PUT") {
         savedCfg = JSON.parse(init.body);
         return { ok: true, status: 200, json: async () => ({ ok: true }) };
       }
-      if (u.endsWith("/config") && method === "GET") {
+      if (u.includes("/config") && method === "GET") {
         return { ok: true, status: 200, json: async () => savedCfg };
       }
       return { ok: true, status: 200, json: async () => ({ ok: true }) };
@@ -898,7 +898,7 @@ describe("App", () => {
     globalThis.fetch = vi.fn(async (url: string, init?: any) => {
       const u = String(url);
       const method = String(init?.method || "GET").toUpperCase();
-      if (u.endsWith("/config") && method === "GET") {
+      if (u.includes("/config") && method === "GET") {
         return { ok: true, status: 200, json: async () => initialCfg };
       }
       return { ok: true, status: 200, json: async () => ({ ok: true }) };
@@ -961,11 +961,11 @@ describe("App", () => {
     globalThis.fetch = vi.fn(async (url: string, init?: any) => {
       const u = String(url);
       const method = String(init?.method || "GET").toUpperCase();
-      if (u.endsWith("/config") && method === "PUT") {
+      if (u.includes("/config") && method === "PUT") {
         savedCfg = JSON.parse(init.body);
         return { ok: true, status: 200, json: async () => ({ ok: true }) };
       }
-      if (u.endsWith("/config") && method === "GET") {
+      if (u.includes("/config") && method === "GET") {
         return { ok: true, status: 200, json: async () => savedCfg };
       }
       return { ok: true, status: 200, json: async () => ({ ok: true }) };
@@ -1016,11 +1016,11 @@ describe("App", () => {
     globalThis.fetch = vi.fn(async (url: string, init?: any) => {
       const u = String(url);
       const method = String(init?.method || "GET").toUpperCase();
-      if (u.endsWith("/config") && method === "PUT") {
+      if (u.includes("/config") && method === "PUT") {
         savedCfg = JSON.parse(init.body);
         return { ok: true, status: 200, json: async () => ({ ok: true }) };
       }
-      if (u.endsWith("/config") && method === "GET") {
+      if (u.includes("/config") && method === "GET") {
         return { ok: true, status: 200, json: async () => savedCfg };
       }
       return { ok: true, status: 200, json: async () => ({ ok: true }) };
@@ -1067,11 +1067,11 @@ describe("App", () => {
     globalThis.fetch = vi.fn(async (url: string, init?: any) => {
       const u = String(url);
       const method = String(init?.method || "GET").toUpperCase();
-      if (u.endsWith("/config") && method === "PUT") {
+      if (u.includes("/config") && method === "PUT") {
         savedCfg = JSON.parse(init.body);
         return { ok: true, status: 200, json: async () => ({ ok: true }) };
       }
-      if (u.endsWith("/config") && method === "GET") {
+      if (u.includes("/config") && method === "GET") {
         return { ok: true, status: 200, json: async () => savedCfg };
       }
       return { ok: true, status: 200, json: async () => ({ ok: true }) };
@@ -1129,11 +1129,11 @@ describe("App", () => {
     globalThis.fetch = vi.fn(async (url: string, init?: any) => {
       const u = String(url);
       const method = String(init?.method || "GET").toUpperCase();
-      if (u.endsWith("/config") && method === "PUT") {
+      if (u.includes("/config") && method === "PUT") {
         savedCfg = JSON.parse(init.body);
         return { ok: true, status: 200, json: async () => ({ ok: true }) };
       }
-      if (u.endsWith("/config") && method === "GET") {
+      if (u.includes("/config") && method === "GET") {
         return { ok: true, status: 200, json: async () => savedCfg };
       }
       return { ok: true, status: 200, json: async () => ({ ok: true }) };
@@ -1186,7 +1186,7 @@ describe("App", () => {
       const u = String(url);
       const method = String(init?.method || "GET").toUpperCase();
 
-      if (u.endsWith("/config") && method === "GET") {
+      if (u.includes("/config") && method === "GET") {
         return { ok: true, status: 200, json: async () => cfg };
       }
 
@@ -1280,7 +1280,7 @@ describe("App", () => {
       const u = String(url);
       const method = String(init?.method || "GET").toUpperCase();
 
-      if (u.endsWith("/config") && method === "GET") {
+      if (u.includes("/config") && method === "GET") {
         return { ok: true, status: 200, json: async () => cfg };
       }
 
@@ -1354,7 +1354,7 @@ describe("App", () => {
       const u = String(url);
       const method = String(init?.method || "GET").toUpperCase();
 
-      if (u.endsWith("/config") && method === "GET") {
+      if (u.includes("/config") && method === "GET") {
         return { ok: true, status: 200, json: async () => cfg };
       }
 
