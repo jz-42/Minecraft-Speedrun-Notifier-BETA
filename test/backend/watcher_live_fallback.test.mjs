@@ -12,6 +12,7 @@ import watcher from "../../src/watcher/run_watcher.js";
 const { getSplitWithLiveFallback, findLiveRunForStreamer } = watcher;
 
 describe("watcher live-run fallback", () => {
+  // Test: prefers getWorld when split exists
   it("prefers getWorld when split exists", () => {
     const world = { data: { nether: 1000, netherRta: 1100 } };
     const liveRun = {
@@ -29,6 +30,7 @@ describe("watcher live-run fallback", () => {
     expect(res).toEqual({ ms: 1000, usedClock: "IGT", source: "world" });
   });
 
+  // Test: falls back to live-run events when getWorld is missing
   it("falls back to live-run events when getWorld is missing", () => {
     const world = { data: { end: null } };
     const liveRun = {
@@ -40,6 +42,7 @@ describe("watcher live-run fallback", () => {
     expect(res).toEqual({ ms: 9000, usedClock: "IGT", source: "live" });
   });
 
+  // Test: handles finish via rsg.credits
   it("handles finish via rsg.credits", () => {
     const world = { data: {} };
     const liveRun = {
@@ -57,6 +60,7 @@ describe("watcher live-run fallback", () => {
     expect(res).toEqual({ ms: 12000, usedClock: "IGT", source: "live" });
   });
 
+  // Test: matches live runs using world nickname when streamer is a twitch handle
   it("matches live runs using world nickname when streamer is a twitch handle", () => {
     const liveRuns = [{ nickname: "xQcOW" }, { nickname: "SomeoneElse" }];
     const match = findLiveRunForStreamer(liveRuns, ["xqc", "xQcOW"]);

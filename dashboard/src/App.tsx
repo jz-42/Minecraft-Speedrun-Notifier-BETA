@@ -25,6 +25,10 @@ type Config = {
     enabled?: boolean;
     sound?: boolean;
   };
+  agent?: {
+    autoUpdate?: boolean;
+    forsenOcr?: boolean;
+  };
 };
 
 function clampInt(n: number, min: number, max: number) {
@@ -159,8 +163,15 @@ function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [showQuietHours, setShowQuietHours] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showAgentSettings, setShowAgentSettings] = useState(false);
+  const [showAddStreamer, setShowAddStreamer] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
   const [installCopied, setInstallCopied] = useState(false);
+  const [showInstallDetails, setShowInstallDetails] = useState(false);
+  const [addStreamerName, setAddStreamerName] = useState("");
+  const [addStreamerErr, setAddStreamerErr] = useState<string | null>(null);
+  const [pendingRemove, setPendingRemove] = useState<string | null>(null);
+  const [showCopyFallback, setShowCopyFallback] = useState(false);
 
   const [draft, setDraft] = useState<Record<string, MilestoneCfg>>({});
   const [saving, setSaving] = useState(false);
@@ -230,6 +241,8 @@ function App() {
   const anyEnabled = milestoneEntries.some(([, cfg]) => cfg.enabled ?? true);
   const notificationsEnabled = cfg?.notifications?.enabled ?? true;
   const notificationSoundEnabled = cfg?.notifications?.sound ?? true;
+  const agentAutoUpdateEnabled = cfg?.agent?.autoUpdate ?? false;
+  const forsenOcrEnabled = cfg?.agent?.forsenOcr ?? false;
 
   function getTwitchUrl(name: string) {
     const raw =
@@ -261,7 +274,7 @@ function App() {
     } catch {
       // fall through to manual prompt
     }
-    window.prompt("Copy this command:", installCommand);
+    setShowCopyFallback(true);
   }
 
   function persistBrowserAlerts(enabled: boolean) {
@@ -603,23 +616,33 @@ function App() {
   }, []);
   // #endregion agent log
 
-  async function addStreamer() {
+  function openAddStreamerPrompt() {
     if (cfg && (cfg.streamers ?? []).length >= MAX_STREAMERS) {
       setErr(
         `Max streamers reached (${MAX_STREAMERS}). Remove one to add more.`
       );
       return;
     }
-    const raw = window.prompt("Streamer name (e.g. xQcOW):");
-    if (raw == null) return; // cancelled
+    setAddStreamerErr(null);
+    setAddStreamerName("");
+    setShowAddStreamer(true);
+  }
 
-    const name = raw.trim();
+  async function submitAddStreamer() {
+    setAddStreamerErr(null);
+    const name = addStreamerName.trim();
     if (!name) {
-      setErr("Streamer name cannot be empty.");
+      setAddStreamerErr("Streamer name cannot be empty.");
       return;
     }
     if (!cfg) {
-      setErr("Config not loaded yet.");
+      setAddStreamerErr("Config not loaded yet.");
+      return;
+    }
+    if ((cfg.streamers ?? []).length >= MAX_STREAMERS) {
+      setAddStreamerErr(
+        `Max streamers reached (${MAX_STREAMERS}). Remove one to add more.`
+      );
       return;
     }
 
@@ -627,7 +650,7 @@ function App() {
       (s) => s.toLowerCase() === name.toLowerCase()
     );
     if (exists) {
-      setErr(`Streamer already exists: ${name}`);
+      setAddStreamerErr(`Streamer already exists: ${name}`);
       return;
     }
 
@@ -636,6 +659,9 @@ function App() {
     optimistic.streamers = [...(optimistic.streamers ?? []), name];
     setCfg(optimistic);
     setErr(null);
+
+    // Close modal immediately for a snappy feel
+    setShowAddStreamer(false);
 
     try {
       const saved = await putConfig(optimistic);
@@ -657,10 +683,13 @@ function App() {
       setErr("Config not loaded yet.");
       return;
     }
-    if (
-      typeof window !== "undefined" &&
-      !window.confirm(`Remove ${name}?`)
-    ) {
+    setPendingRemove(name);
+    return;
+  }
+
+  async function confirmRemoveStreamer(name: string) {
+    if (!cfg) {
+      setErr("Config not loaded yet.");
       return;
     }
 
@@ -1435,7 +1464,7 @@ function App() {
           ))}
 
           <div className="avatarTile addTile">
-            <button className="avatarBtn add" onClick={addStreamer}>
+            <button className="avatarBtn add" onClick={openAddStreamerPrompt}>
               <svg className="addPlus" viewBox="0 0 24 24" aria-hidden="true">
                 <path
                   fill="currentColor"
@@ -1445,6 +1474,37 @@ function App() {
             </button>
             <div className="label">Add Streamer</div>
           </div>
+        </div>
+
+        <div className="alertsStrip alertsBottom">
+          <div className="alertsBanner">
+            <span
+              className={`alertsDot ${browserAlertsEnabled ? "on" : "off"}`}
+              aria-hidden="true"
+            />
+            <span className="alertsBannerText">
+              Browser alerts only work while this tab is open. Install the Mac
+              agent for background alerts.
+            </span>
+          </div>
+          <div className="alertsRow">
+            <button
+              className="alertsToggleBtn"
+              type="button"
+              onClick={() =>
+                browserAlertsEnabled
+                  ? disableBrowserAlerts()
+                  : enableBrowserAlerts()
+              }
+            >
+              {browserAlertsEnabled
+                ? "Browser alerts enabled"
+                : "Enable browser alerts"}
+            </button>
+          </div>
+          {browserAlertsErr ? (
+            <div className="alertsError">{browserAlertsErr}</div>
+          ) : null}
         </div>
 
         <div className="installCard">
@@ -1474,72 +1534,64 @@ function App() {
               </a>{" "}
               and runs the watcher (no bitcoin miner).
             </div>
-            <div className="installNotice">
-              Browser alerts work only while this tab stays open. Install the
-              Mac agent for background alerts when the tab is closed.
-            </div>
-            <div className="browserAlertRow">
-              <button
-                className="browserAlertBtn"
-                type="button"
-                onClick={() =>
-                  browserAlertsEnabled ? disableBrowserAlerts() : enableBrowserAlerts()
-                }
-              >
-                {browserAlertsEnabled
-                  ? "Browser alerts enabled"
-                  : "Enable browser alerts (tab open)"}
-              </button>
-              <span className="browserAlertHint">
-                {notificationsEnabled ? "Tab open only" : "Muted in Settings"}
-              </span>
-            </div>
-            {browserAlertsErr ? (
-              <div className="browserAlertError">{browserAlertsErr}</div>
+            <button
+              className="installDetailsToggle"
+              type="button"
+              onClick={() => setShowInstallDetails((prev) => !prev)}
+            >
+              {showInstallDetails ? "Hide instructions" : "Instructions"}
+            </button>
+            {showInstallDetails ? (
+              <div className="installDetails">
+                <div className="installSteps">
+                  <span className="installStepTitle">Option A (Finder)</span>
+                  <br />
+                  1. Download the installer
+                  <br />
+                  2. Right-click it → Open
+                  <br />
+                  3. If blocked: System Settings → Privacy &amp; Security → Open
+                  Anyway
+                </div>
+                <div className="installSteps">
+                  <span className="installStepTitle">Option B (Terminal)</span>
+                  <br />
+                  Copy/paste this to bypass Finder prompts:
+                </div>
+                <div className="installCommandRow">
+                  <button
+                    className="installCopy"
+                    type="button"
+                    onClick={copyInstallCommand}
+                  >
+                    {installCopied ? "Copied" : "Copy terminal command"}
+                  </button>
+                  <span className="installCommandHint">
+                    Same installer, fewer prompts
+                  </span>
+                </div>
+                <div className="installCommand">{installCommand}</div>
+                <div className="installTestRow">
+                  <button
+                    className="installTest"
+                    type="button"
+                    onClick={sendTestNotification}
+                    disabled={testStatus === "sending"}
+                  >
+                    {testStatus === "sending"
+                      ? "Sending…"
+                      : "Send test notification"}
+                  </button>
+                  <span className="installTestHint">
+                    {testStatus === "success"
+                      ? "Sent! Check your desktop notifications."
+                      : testStatus === "error"
+                        ? "No agent detected yet."
+                        : "Use this after install to verify it works."}
+                  </span>
+                </div>
+              </div>
             ) : null}
-            <div className="installSteps">
-              <strong>Option A (Finder)</strong>
-              <br />
-              1. Download the installer
-              <br />
-              2. Right-click it → Open
-              <br />
-              3. If blocked: System Settings → Privacy &amp; Security → Open
-              Anyway
-            </div>
-            <div className="installSteps">
-              <strong>Option B (Terminal)</strong>
-              <br />
-              Copy/paste this to bypass Finder prompts:
-            </div>
-            <div className="installCommandRow">
-              <button
-                className="installCopy"
-                type="button"
-                onClick={copyInstallCommand}
-              >
-                {installCopied ? "Copied" : "Copy terminal command"}
-              </button>
-              <span className="installCommandHint">Same installer, fewer prompts</span>
-            </div>
-            <div className="installCommand">{installCommand}</div>
-            <div className="installTestRow">
-              <button
-                className="installTest"
-                type="button"
-                onClick={sendTestNotification}
-                disabled={testStatus === "sending"}
-              >
-                {testStatus === "sending" ? "Sending…" : "Send test notification"}
-              </button>
-              <span className="installTestHint">
-                {testStatus === "success"
-                  ? "Sent! Check your desktop notifications."
-                  : testStatus === "error"
-                    ? "No agent detected yet."
-                    : "Use this after install to verify it works."}
-              </span>
-            </div>
           </div>
           <div className="installActions">
             <a
@@ -1585,9 +1637,9 @@ function App() {
                 width: 420,
                 padding: 26,
                 borderRadius: 18,
-                background: "#3a3b42",
+                background: "var(--surfaceSolid)",
                 boxShadow: "0 16px 60px rgba(0,0,0,0.55)",
-                border: "1px solid rgba(255,255,255,0.08)",
+                border: "1px solid var(--border)",
                 zIndex: 81,
               }}
             >
@@ -1636,6 +1688,15 @@ function App() {
                   }}
                 >
                   Notifications
+                </button>
+                <button
+                  style={settingsRowStyle}
+                  onClick={() => {
+                    setShowSettings(false);
+                    setShowAgentSettings(true);
+                  }}
+                >
+                  Agent (Mac)
                 </button>
               </div>
             </div>
@@ -1731,6 +1792,98 @@ function App() {
                     }}
                   />
                 </label>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {showAgentSettings ? (
+          <div className="qhOverlay" onClick={() => setShowAgentSettings(false)}>
+            <div
+              className="qhModal"
+              onClick={(e) => e.stopPropagation()}
+              role="dialog"
+              aria-label="Agent"
+            >
+              <div className="qhHeader">
+                <div>
+                  <div className="qhTitle">Agent (Mac)</div>
+                  <div className="qhHelp">
+                    Control background alerts and experimental features for the
+                    local agent.
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="iconBtn"
+                  aria-label="Close agent settings"
+                  style={{ width: 46, height: 46 }}
+                  onClick={() => setShowAgentSettings(false)}
+                >
+                  <svg
+                    className="iconSvg close"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                  >
+                    <path
+                      fill="currentColor"
+                      d="M18.3 5.71a1 1 0 0 0-1.41 0L12 10.59 7.11 5.7A1 1 0 1 0 5.7 7.11L10.59 12 5.7 16.89a1 1 0 1 0 1.41 1.41L12 13.41l4.89 4.89a1 1 0 0 0 1.41-1.41L13.41 12l4.89-4.89a1 1 0 0 0 0-1.4Z"
+                    />
+                  </svg>
+                </button>
+              </div>
+
+              <div className="notifBody">
+                <label className="notifRow">
+                  <span>Auto‑update agent on launch</span>
+                  <input
+                    type="checkbox"
+                    checked={agentAutoUpdateEnabled}
+                    onChange={(e) => {
+                      const next = e.target.checked;
+                      if (!cfg) return;
+                      const updated = structuredClone(cfg);
+                      updated.agent = {
+                        ...(updated.agent || {}),
+                        autoUpdate: next,
+                        forsenOcr:
+                          updated.agent?.forsenOcr ?? forsenOcrEnabled,
+                      };
+                      setCfg(updated);
+                      setErr(null);
+                      void putConfig(updated).catch((e) =>
+                        setErr(e?.message ?? String(e))
+                      );
+                    }}
+                  />
+                </label>
+                <label className="notifRow">
+                  <span>Forsen OCR (experimental)</span>
+                  <input
+                    type="checkbox"
+                    checked={forsenOcrEnabled}
+                    onChange={(e) => {
+                      const next = e.target.checked;
+                      if (!cfg) return;
+                      const updated = structuredClone(cfg);
+                      updated.agent = {
+                        ...(updated.agent || {}),
+                        autoUpdate:
+                          updated.agent?.autoUpdate ?? agentAutoUpdateEnabled,
+                        forsenOcr: next,
+                      };
+                      setCfg(updated);
+                      setErr(null);
+                      void putConfig(updated).catch((e) =>
+                        setErr(e?.message ?? String(e))
+                      );
+                    }}
+                  />
+                </label>
+                <div className="notifNote">
+                  Forsen OCR requires the Mac agent and is opt‑in. It may use
+                  extra CPU/bandwidth.
+                </div>
               </div>
             </div>
           </div>
@@ -2016,6 +2169,208 @@ function App() {
             </div>
           </div>
         ) : null}
+
+        {showAddStreamer ? (
+          <div
+            className="qhOverlay"
+            onClick={() => {
+              setShowAddStreamer(false);
+              setAddStreamerErr(null);
+            }}
+          >
+            <div
+              className="qhModal qhModal--xs"
+              onClick={(e) => e.stopPropagation()}
+              role="dialog"
+              aria-label="Add streamer"
+            >
+              <div className="qhHeader">
+                <div>
+                  <div className="qhTitle">Add Streamer</div>
+                  <div className="qhHelp">
+                    Enter a Paceman player name (usually their Twitch handle).
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="iconBtn"
+                  aria-label="Close add streamer"
+                  style={{ width: 46, height: 46 }}
+                  onClick={() => {
+                    setShowAddStreamer(false);
+                    setAddStreamerErr(null);
+                  }}
+                >
+                  <svg
+                    className="iconSvg close"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                  >
+                    <path
+                      fill="currentColor"
+                      d="M18.3 5.71a1 1 0 0 0-1.41 0L12 10.59 7.11 5.7A1 1 0 1 0 5.7 7.11L10.59 12 5.7 16.89a1 1 0 1 0 1.41 1.41L12 13.41l4.89 4.89a1 1 0 0 0 1.41-1.41L13.41 12l4.89-4.89a1 1 0 0 0 0-1.4Z"
+                    />
+                  </svg>
+                </button>
+              </div>
+
+              {addStreamerErr ? (
+                <div className="qhError">{addStreamerErr}</div>
+              ) : null}
+
+              <div className="promptBody">
+                <div className="promptLabel">Streamer name</div>
+                <input
+                  className="promptInput"
+                  value={addStreamerName}
+                  onChange={(e) => setAddStreamerName(e.target.value)}
+                  placeholder="e.g. xQcOW"
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key !== "Enter") return;
+                    e.preventDefault();
+                    void submitAddStreamer();
+                  }}
+                />
+              </div>
+
+              <div className="promptActions">
+                <button
+                  type="button"
+                  style={smallBtn}
+                  onClick={() => {
+                    setShowAddStreamer(false);
+                    setAddStreamerErr(null);
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="qhSave"
+                  onClick={() => void submitAddStreamer()}
+                >
+                  Add
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {pendingRemove ? (
+          <div
+            className="qhOverlay"
+            onClick={() => setPendingRemove(null)}
+          >
+            <div
+              className="qhModal qhModal--sm"
+              onClick={(e) => e.stopPropagation()}
+              role="dialog"
+              aria-label="Remove streamer"
+            >
+              <div className="qhHeader">
+                <div>
+                  <div className="qhTitle">Remove streamer?</div>
+                  <div className="qhHelp">
+                    This will remove <strong>{pendingRemove}</strong> from your
+                    dashboard (and delete their saved thresholds on this browser).
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="iconBtn"
+                  aria-label="Close remove streamer"
+                  style={{ width: 46, height: 46 }}
+                  onClick={() => setPendingRemove(null)}
+                >
+                  <svg
+                    className="iconSvg close"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                  >
+                    <path
+                      fill="currentColor"
+                      d="M18.3 5.71a1 1 0 0 0-1.41 0L12 10.59 7.11 5.7A1 1 0 1 0 5.7 7.11L10.59 12 5.7 16.89a1 1 0 1 0 1.41 1.41L12 13.41l4.89 4.89a1 1 0 0 0 1.41-1.41L13.41 12l4.89-4.89a1 1 0 0 0 0-1.4Z"
+                    />
+                  </svg>
+                </button>
+              </div>
+
+              <div className="promptActions">
+                <button
+                  type="button"
+                  style={smallBtn}
+                  onClick={() => setPendingRemove(null)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="qhSave"
+                  onClick={() => {
+                    const name = pendingRemove;
+                    setPendingRemove(null);
+                    if (name) void confirmRemoveStreamer(name);
+                  }}
+                >
+                  Remove
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {showCopyFallback ? (
+          <div className="qhOverlay" onClick={() => setShowCopyFallback(false)}>
+            <div
+              className="qhModal qhModal--sm"
+              onClick={(e) => e.stopPropagation()}
+              role="dialog"
+              aria-label="Copy install command"
+            >
+              <div className="qhHeader">
+                <div>
+                  <div className="qhTitle">Copy install command</div>
+                  <div className="qhHelp">
+                    Your browser blocked clipboard access. Copy the command below.
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="iconBtn"
+                  aria-label="Close copy command"
+                  style={{ width: 46, height: 46 }}
+                  onClick={() => setShowCopyFallback(false)}
+                >
+                  <svg
+                    className="iconSvg close"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                  >
+                    <path
+                      fill="currentColor"
+                      d="M18.3 5.71a1 1 0 0 0-1.41 0L12 10.59 7.11 5.7A1 1 0 1 0 5.7 7.11L10.59 12 5.7 16.89a1 1 0 1 0 1.41 1.41L12 13.41l4.89 4.89a1 1 0 0 0 1.41-1.41L13.41 12l4.89-4.89a1 1 0 0 0 0-1.4Z"
+                    />
+                  </svg>
+                </button>
+              </div>
+
+              <div className="installCommand" style={{ marginTop: 12 }}>
+                {installCommand}
+              </div>
+
+              <div className="promptActions">
+                <button
+                  type="button"
+                  style={smallBtn}
+                  onClick={() => setShowCopyFallback(false)}
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
       </div>
     </div>
   );
@@ -2024,8 +2379,8 @@ function App() {
 const settingsRowStyle: CSSProperties = {
   height: 62,
   borderRadius: 12,
-  border: "1px solid rgba(255,255,255,0.18)",
-  background: "rgba(255,255,255,0.06)",
+  border: "1px solid var(--borderStrong)",
+  background: "rgba(20, 18, 32, 0.52)",
   color: "#ddd",
   fontSize: 24,
   textAlign: "left",
@@ -2037,8 +2392,8 @@ const smallBtn: CSSProperties = {
   height: 40,
   padding: "0 14px",
   borderRadius: 10,
-  border: "1px solid rgba(255,255,255,0.14)",
-  background: "rgba(255,255,255,0.06)",
+  border: "1px solid var(--border)",
+  background: "rgba(20, 18, 32, 0.48)",
   color: "#eaeaea",
   cursor: "pointer",
 };

@@ -66,6 +66,7 @@ describe("api/server", () => {
     );
   });
 
+  // Test: defaultIsAllowedOrigin allows localhost ports and blocks others
   it("defaultIsAllowedOrigin allows localhost ports and blocks others", () => {
     // Beginner summary: Vite can switch ports (5173 -> 5174). We must allow localhost:anyPort in dev.
     expect(defaultIsAllowedOrigin("http://localhost:5173")).toBe(true);
@@ -74,6 +75,7 @@ describe("api/server", () => {
     expect(defaultIsAllowedOrigin("http://evil.com")).toBe(false);
   });
 
+  // Test: GET /config returns config json
   it("GET /config returns config json", async () => {
     // Beginner summary: dashboard boot depends on this returning valid JSON.
     const app = createApp({
@@ -88,6 +90,7 @@ describe("api/server", () => {
     expect(r.body.streamers).toEqual(["xQcOW"]);
   });
 
+  // Test: GET /config with token creates a per-user config file
   it("GET /config with token creates a per-user config file", async () => {
     const app = createApp({
       configPath,
@@ -105,6 +108,7 @@ describe("api/server", () => {
     expect(fs.existsSync(tokenPath)).toBe(true);
   });
 
+  // Test: PUT /config validates and persists
   it("PUT /config validates and persists", async () => {
     // Beginner summary: dashboard save depends on this endpoint persisting config.json.
     const app = createApp({
@@ -129,6 +133,7 @@ describe("api/server", () => {
     expect(saved.streamers).toEqual(["xQcOW", "forsen"]);
   });
 
+  // Test: PUT /config with token writes to per-user file only
   it("PUT /config with token writes to per-user file only", async () => {
     const app = createApp({
       configPath,
@@ -159,6 +164,7 @@ describe("api/server", () => {
     expect(saved.streamers).toEqual(["xQcOW", "snoop"]);
   });
 
+  // Test: PUT /config rejects too many streamers
   it("PUT /config rejects too many streamers", async () => {
     const app = createApp({
       configPath,
@@ -181,6 +187,7 @@ describe("api/server", () => {
     expect(String(r.body?.error || "")).toContain("too many streamers");
   });
 
+  // Test: POST /notify/test calls notifySend
   it("POST /notify/test calls notifySend", async () => {
     // Beginner summary: clicking “Test desktop notification” should call the notifier router.
     const notifySend = vi.fn(async () => {});
@@ -202,6 +209,7 @@ describe("api/server", () => {
     });
   });
 
+  // Test: GET /status returns per-streamer isLive based on paceman world.isLive
   it("GET /status returns per-streamer isLive based on paceman world.isLive", async () => {
     // Beginner summary: dashboard polls this endpoint for tile indicators (active + last milestone).
     const paceman = {
@@ -241,6 +249,7 @@ describe("api/server", () => {
     expect(r.body.statuses.forsen.lastMilestone).toBe(null);
   });
 
+  // Test: GET /status marks isActive when the run updated recently (even if isLive=false)
   it("GET /status marks isActive when the run updated recently (even if isLive=false)", async () => {
     // Beginner summary: Paceman run-level isLive can go false; we still want the dot green if updates are recent.
     vi.useFakeTimers();
@@ -275,6 +284,7 @@ describe("api/server", () => {
     expect(r.body.statuses.xQcOW.lastMilestone).toBe("bastion");
   });
 
+  // Test: GET /status surfaces a short Finish grace when a new run starts immediately
   it("GET /status surfaces a short Finish grace when a new run starts immediately", async () => {
     // Beginner summary: if a runner finishes and instantly starts a new run, we still want to show Finish briefly.
     vi.useFakeTimers();
@@ -328,6 +338,7 @@ describe("api/server", () => {
     expect(r.body.statuses.Couriway.recentFinishUpdatedSec).toBe(nowSec - 65);
   });
 
+  // Test: GET /profiles returns twitch/uuid/avatarUrl per streamer
   it("GET /profiles returns twitch/uuid/avatarUrl per streamer", async () => {
     // Beginner summary: dashboard uses this endpoint to render streamer profile photos in tiles.
     const paceman = {
@@ -355,6 +366,8 @@ describe("api/server", () => {
     expect(r.body.profiles.xQcOW.uuid).toBe(
       "37ee4401-5b10-48f1-bdd3-05037bef612f"
     );
-    expect(r.body.profiles.xQcOW.avatarUrl).toContain("unavatar.io");
+    expect(r.body.profiles.xQcOW.avatarUrl).toMatch(
+      /(unavatar\.io|static-cdn\.jtvnw\.net)/
+    );
   });
 });

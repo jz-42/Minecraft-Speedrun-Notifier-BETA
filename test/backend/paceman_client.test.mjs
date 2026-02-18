@@ -31,22 +31,26 @@ const world = JSON.parse(
 const { getSplitMs } = client;
 
 describe("paceman/client.getSplitMs", () => {
+  // Test: reads IGT from bare keys (e.g. nether)
   it("reads IGT from bare keys (e.g. nether)", () => {
     // Beginner summary: on Paceman `getWorld`, IGT uses bare keys like `data.nether`.
     expect(getSplitMs(world, "nether", "IGT")).toBe(179852);
   });
 
+  // Test: reads RTA from <base>Rta keys (e.g. netherRta)
   it("reads RTA from <base>Rta keys (e.g. netherRta)", () => {
     // Beginner summary: RTA uses a `Rta` suffix like `data.netherRta`.
     expect(getSplitMs(world, "nether", "RTA")).toBe(181812);
   });
 
+  // Test: returns null for missing splits
   it("returns null for missing splits", () => {
     // Beginner summary: if Paceman doesn't have a split yet, treat it as missing (null), not 0.
     expect(getSplitMs(world, "bastion", "IGT")).toBe(null);
     expect(getSplitMs(world, "bastion", "RTA")).toBe(null);
   });
 
+  // Test: handles camelCase split keys when base is snake_case
   it("handles camelCase split keys when base is snake_case", () => {
     const camelWorld = {
       data: {

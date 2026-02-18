@@ -12,9 +12,11 @@ fi
 
 rsync -a --delete \
   --exclude ".git" \
+  --exclude "configs" \
   --exclude "node_modules" \
   --exclude "dashboard/node_modules" \
   --exclude ".env" \
+  --exclude "dashboard/.env.local" \
   --exclude "sent_keys.json" \
   --exclude ".DS_Store" \
   --exclude "runalert-beta" \

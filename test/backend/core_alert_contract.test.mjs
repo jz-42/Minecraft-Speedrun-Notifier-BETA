@@ -41,6 +41,7 @@ const MILESTONES = [
 ];
 
 describe("core alert contract", () => {
+  // Test: notifies for every milestone when split exists and is under cutoff (IGT)
   it("notifies for every milestone when split exists and is under cutoff (IGT)", () => {
     // Beginner summary: for each milestone, if Paceman provides a split time and it's under the cutoff,
     // we expect the watcher to trigger a notification.
@@ -58,6 +59,7 @@ describe("core alert contract", () => {
     }
   });
 
+  // Test: does not notify when disabled or missing
   it("does not notify when disabled or missing", () => {
     // Disabled milestones should never notify; missing split times (null) should never notify.
     expect(
@@ -68,6 +70,7 @@ describe("core alert contract", () => {
     ).toBe(false);
   });
 
+  // Test: disabled milestones suppress notifications even when time is under threshold
   it("disabled milestones suppress notifications even when time is under threshold", () => {
     // Critical: When enabled=false, notifications must be suppressed regardless of split time.
     // This is the core behavior that the UI toggle controls.
@@ -105,6 +108,7 @@ describe("core alert contract", () => {
     ).toBe(false);
   });
 
+  // Test: respects cutoff when not forced
   it("respects cutoff when not forced", () => {
     // If split is slower than the cutoff, we should NOT notify unless forceSend is enabled.
     // 12 seconds >= cutoff 10 seconds => no notify
@@ -127,6 +131,7 @@ describe("core alert contract", () => {
     ).toBe(true);
   });
 
+  // Test: disabled milestones NEVER send notifications (comprehensive check)
   it("disabled milestones NEVER send notifications (comprehensive check)", () => {
     // This test explicitly verifies that enabled=false means NO notifications, period.
     // This is the core contract: UI toggle off = no notifications, ever.

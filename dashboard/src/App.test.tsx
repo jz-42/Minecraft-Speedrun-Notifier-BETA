@@ -46,6 +46,7 @@ describe("App", () => {
     vi.useRealTimers();
   });
 
+  // Test: loads config and renders streamer tiles
   it("loads config and renders streamer tiles", async () => {
     // Contract: App calls GET /config on mount and renders the returned streamers.
     mockFetchSequence([
@@ -67,6 +68,7 @@ describe("App", () => {
     expect(await screen.findByTestId("header-quietHours")).toBeTruthy();
   });
 
+  // Test: add streamer uses default milestones (1 hour for debugging)
   it("add streamer uses default milestones (1 hour for debugging)", async () => {
     // Critical: New streamers should inherit defaultMilestones from config.
     // For debugging, all defaults are set to 3600 seconds (1 hour).
@@ -138,6 +140,7 @@ describe("App", () => {
     expect((netherSeconds as HTMLInputElement).value).toBe("00");
   });
 
+  // Test: add streamer calls PUT /config then re-renders
   it("add streamer calls PUT /config then re-renders", async () => {
     // Beginner summary: adding a streamer should call PUT /config and show the new tile.
     vi.spyOn(window, "prompt").mockReturnValue("forsen");
@@ -171,6 +174,7 @@ describe("App", () => {
     expect(await screen.findByText("forsen")).toBeTruthy();
   });
 
+  // Test: clicking the header Quiet Hours pill opens the Quiet Hours modal
   it("clicking the header Quiet Hours pill opens the Quiet Hours modal", async () => {
     mockFetchSequence([
       {
@@ -193,6 +197,7 @@ describe("App", () => {
     expect(await screen.findByText(/keep monitoring runs/i)).toBeTruthy();
   });
 
+  // Test: quiet hours editor saves an array of ranges (multi-span) and enforces max 3 spans
   it("quiet hours editor saves an array of ranges (multi-span) and enforces max 3 spans", async () => {
     const initialCfg: any = {
       streamers: ["xQcOW"],
@@ -307,6 +312,7 @@ describe("App", () => {
     });
   });
 
+  // Test: quiet hours editor blocks invalid entries (start=end)
   it("quiet hours editor blocks invalid entries (start=end)", async () => {
     const initialCfg: any = {
       streamers: ["xQcOW"],
@@ -365,6 +371,7 @@ describe("App", () => {
     expect(putCalls).toBe(0);
   });
 
+  // Test: quiet hours editor blocks incomplete/invalid inputs
   it("quiet hours editor blocks incomplete/invalid inputs", async () => {
     const initialCfg: any = {
       streamers: ["xQcOW"],
@@ -423,6 +430,7 @@ describe("App", () => {
     expect(putCalls).toBe(0);
   });
 
+  // Test: quiet hours editor allows overlapping spans (overlaps are fine)
   it("quiet hours editor allows overlapping spans (overlaps are fine)", async () => {
     // Overlaps are allowed - they just mean "quiet if in ANY span"
     const initialCfg: any = {
@@ -508,6 +516,7 @@ describe("App", () => {
     });
   });
 
+  // Test: quiet hours editor handles midnight edge cases correctly
   it("quiet hours editor handles midnight edge cases correctly", async () => {
     const initialCfg: any = {
       streamers: ["xQcOW"],
@@ -568,6 +577,7 @@ describe("App", () => {
     });
   });
 
+  // Test: quiet hours editor allows empty array (no quiet hours)
   it("quiet hours editor allows empty array (no quiet hours)", async () => {
     const initialCfg: any = {
       streamers: ["xQcOW"],
@@ -609,6 +619,7 @@ describe("App", () => {
     });
   });
 
+  // Test: blocks Add Streamer when max streamers reached
   it("blocks Add Streamer when max streamers reached", async () => {
     const streamers = Array.from({ length: 15 }, (_, i) => `s${i}`);
     const cfg: any = {
@@ -647,6 +658,7 @@ describe("App", () => {
     ).toBeTruthy();
   });
 
+  // Test: edits milestone cutoff via minutes+seconds and persists thresholdSec in seconds
   it("edits milestone cutoff via minutes+seconds and persists thresholdSec in seconds", async () => {
     vi.spyOn(window, "prompt").mockReturnValue(null);
 
@@ -697,6 +709,7 @@ describe("App", () => {
     });
   });
 
+  // Test: toggles milestone enabled state and persists it
   it("toggles milestone enabled state and persists it", async () => {
     vi.spyOn(window, "prompt").mockReturnValue(null);
 
@@ -807,6 +820,7 @@ describe("App", () => {
     }, { timeout: 2000 });
   });
 
+  // Test: toggles milestone enabled state with autosave (debounced)
   it("toggles milestone enabled state with autosave (debounced)", async () => {
     vi.spyOn(window, "prompt").mockReturnValue(null);
 
@@ -875,6 +889,7 @@ describe("App", () => {
     vi.useRealTimers();
   });
 
+  // Test: disabled milestones show reduced opacity in UI
   it("disabled milestones show reduced opacity in UI", async () => {
     vi.spyOn(window, "prompt").mockReturnValue(null);
 
@@ -944,6 +959,7 @@ describe("App", () => {
     expect((bastionRow as HTMLElement).style.opacity).toBe("1");
   });
 
+  // Test: autosaves milestone edits after a short pause (debounced)
   it("autosaves milestone edits after a short pause (debounced)", async () => {
     // Beginner summary: as you type, the app should auto-save after you stop typing briefly.
     vi.spyOn(window, "prompt").mockReturnValue(null);
@@ -999,6 +1015,7 @@ describe("App", () => {
     expect(savedCfg.profiles?.xQcOW?.nether?.thresholdSec).toBe(301);
   });
 
+  // Test: pressing Enter in a time input saves immediately (no debounce)
   it("pressing Enter in a time input saves immediately (no debounce)", async () => {
     // Beginner summary: Enter should force-save right away, even if the debounce timer hasn't fired.
     vi.spyOn(window, "prompt").mockReturnValue(null);
@@ -1050,6 +1067,7 @@ describe("App", () => {
     });
   });
 
+  // Test: close + reopen streamer panel shows the persisted values (autosave path)
   it("close + reopen streamer panel shows the persisted values (autosave path)", async () => {
     // Beginner summary: after autosave, closing and reopening the panel should show the saved cutoff.
     vi.spyOn(window, "prompt").mockReturnValue(null);
@@ -1112,6 +1130,7 @@ describe("App", () => {
     expect((ss2 as HTMLInputElement).value).toBe("05");
   });
 
+  // Test: close + reopen streamer panel shows the persisted values (Enter path)
   it("close + reopen streamer panel shows the persisted values (Enter path)", async () => {
     // Beginner summary: after hitting Enter, closing and reopening should show the saved cutoff.
     vi.spyOn(window, "prompt").mockReturnValue(null);
@@ -1169,6 +1188,7 @@ describe("App", () => {
     expect((ss2 as HTMLInputElement).value).toBe("00");
   });
 
+  // Test: renders per-streamer milestone badges only when active, and none on Add Streamer
   it("renders per-streamer milestone badges only when active, and none on Add Streamer", async () => {
     // Beginner summary: tiles should show a breathing milestone badge only when the runner is active and has hit a split.
     vi.spyOn(window, "prompt").mockReturnValue(null);
@@ -1263,6 +1283,7 @@ describe("App", () => {
     expect(addBadge).toBeNull();
   });
 
+  // Test: renders Finish as a gold, non-pulsing badge with a minimal tooltip
   it("renders Finish as a gold, non-pulsing badge with a minimal tooltip", async () => {
     // Beginner summary: finish should look final (gold + no breathing), and show finish time + recency on hover.
     vi.spyOn(window, "prompt").mockReturnValue(null);
@@ -1337,6 +1358,7 @@ describe("App", () => {
     );
   });
 
+  // Test: shows Finish briefly even if a new run started immediately (finish grace)
   it("shows Finish briefly even if a new run started immediately (finish grace)", async () => {
     // Beginner summary: if a runner insta-starts a new run, we still want a short Finish badge moment.
     vi.spyOn(window, "prompt").mockReturnValue(null);

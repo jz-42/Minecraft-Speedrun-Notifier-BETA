@@ -18,12 +18,16 @@ const {
 
 const fs = require("fs");
 const path = require("path");
+const { execSync } = require("child_process");
 const CONFIG_PATH = path.join(__dirname, "../../config.json");
 const REMOTE_CONFIG_URL = (process.env.REMOTE_CONFIG_URL || "").trim();
 const REMOTE_CONFIG_POLL_MS =
   Number(process.env.REMOTE_CONFIG_POLL_MS) || 5_000;
+const AUTO_UPDATE_CHECK_MS =
+  Number(process.env.RUNALERT_AUTO_UPDATE_MS) || 6 * 60 * 60 * 1000;
 let remoteConfig = null;
 let remoteConfigUpdatedAt = null;
+let autoUpdateInProgress = false;
 
 function loadCfg() {
   if (REMOTE_CONFIG_URL && remoteConfig) {
@@ -31,6 +35,65 @@ function loadCfg() {
   }
   const raw = fs.readFileSync(CONFIG_PATH, "utf8");
   return JSON.parse(raw);
+}
+
+function shouldAutoUpdate(cfg) {
+  return !!cfg?.agent?.autoUpdate;
+}
+
+function repoIsGit() {
+  const gitDir = path.join(__dirname, "../../.git");
+  return fs.existsSync(gitDir);
+}
+
+function hasUpstream() {
+  try {
+    execSync("git rev-parse --abbrev-ref --symbolic-full-name @{u}", {
+      stdio: "ignore",
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function gitPullFastForward() {
+  const output = execSync("git pull --ff-only", { stdio: "pipe" }).toString();
+  const upToDate = /already up[- ]to[- ]date/i.test(output);
+  return !upToDate;
+}
+
+function maybeAutoUpdateOnce(cfg) {
+  if (autoUpdateInProgress) return;
+  if (!shouldAutoUpdate(cfg)) return;
+  if (!repoIsGit()) {
+    if (DEBUG) console.log("[update] skipping (not a git repo)");
+    return;
+  }
+  if (!hasUpstream()) {
+    if (DEBUG) console.log("[update] skipping (no upstream configured)");
+    return;
+  }
+  autoUpdateInProgress = true;
+  try {
+    const updated = gitPullFastForward();
+    if (updated) {
+      console.log("[update] pulled latest changes; installing deps...");
+      try {
+        execSync("npm install --production", { stdio: "inherit" });
+      } catch (e) {
+        console.warn("[update] npm install failed:", e?.message || e);
+      }
+      console.log("[update] restarting to apply updates...");
+      setTimeout(() => process.exit(0), 500);
+    } else if (DEBUG) {
+      console.log("[update] already up to date");
+    }
+  } catch (e) {
+    console.warn("[update] auto-update failed:", e?.message || e);
+  } finally {
+    autoUpdateInProgress = false;
+  }
 }
 
 function buildMilestones(cfg) {
@@ -313,6 +376,13 @@ function printConfigSummary(
 
 function getClocks() {
   const cfg = loadCfg();
+  if (process.env.NODE_ENV !== "test") {
+    maybeAutoUpdateOnce(cfg);
+    setInterval(() => {
+      const nextCfg = loadCfg();
+      maybeAutoUpdateOnce(nextCfg);
+    }, AUTO_UPDATE_CHECK_MS);
+  }
   const primary = (cfg.clock || "IGT").toUpperCase();
   const fallback = primary === "IGT" ? "RTA" : "IGT";
   return { primary, fallback };

@@ -48,6 +48,103 @@ function createApp({
   const TWITCH_CLIENT_ID = process.env.TWITCH_CLIENT_ID || "";
   const TWITCH_CLIENT_SECRET = process.env.TWITCH_CLIENT_SECRET || "";
 
+  function normalizeTwitchHandle(value) {
+    const raw = String(value || "").trim();
+    if (!raw) return null;
+    let handle = raw;
+    handle = handle.replace(/^https?:\/\//i, "");
+    handle = handle.replace(/^www\./i, "");
+    if (handle.toLowerCase().startsWith("twitch.tv/")) {
+      handle = handle.slice("twitch.tv/".length);
+    }
+    handle = handle.replace(/^@/, "");
+    handle = handle.split(/[/?#]/)[0];
+    return handle ? handle.trim() : null;
+  }
+
+  async function getTwitchAppToken() {
+    if (!TWITCH_CLIENT_ID || !TWITCH_CLIENT_SECRET) return null;
+    const cached = cacheGet("twitchAppToken");
+    if (cached?.token && typeof cached?.exp === "number") {
+      // refresh a minute early
+      if (Date.now() < cached.exp - 60_000) return cached.token;
+    }
+
+    try {
+      const tokenUrl =
+        "https://id.twitch.tv/oauth2/token" +
+        `?client_id=${encodeURIComponent(TWITCH_CLIENT_ID)}` +
+        `&client_secret=${encodeURIComponent(TWITCH_CLIENT_SECRET)}` +
+        "&grant_type=client_credentials";
+      const resp = await fetch(tokenUrl, { method: "POST" });
+      if (!resp.ok) return null;
+      const data = await resp.json();
+      const token = data?.access_token;
+      const expiresIn = Number(data?.expires_in) || 3600;
+      if (!token) return null;
+      cacheSet(
+        "twitchAppToken",
+        {
+          token,
+          exp: Date.now() + expiresIn * 1000,
+        },
+        expiresIn * 1000
+      );
+      return token;
+    } catch {
+      return null;
+    }
+  }
+
+  async function fetchTwitchAvatarUrl(handle) {
+    const normalized = normalizeTwitchHandle(handle);
+    if (!normalized) return null;
+
+    // Prefer official Helix when credentials are present.
+    try {
+      const appToken = await getTwitchAppToken();
+      if (TWITCH_CLIENT_ID && appToken) {
+        const helixUrl = `https://api.twitch.tv/helix/users?login=${encodeURIComponent(
+          normalized
+        )}`;
+        const helixResp = await fetch(helixUrl, {
+          headers: {
+            "Client-ID": TWITCH_CLIENT_ID,
+            Authorization: `Bearer ${appToken}`,
+          },
+        });
+        if (helixResp.ok) {
+          const data = await helixResp.json();
+          const profileImage = Array.isArray(data?.data)
+            ? data.data?.[0]?.profile_image_url
+            : null;
+          if (typeof profileImage === "string" && profileImage.trim()) {
+            return profileImage.trim();
+          }
+        }
+      }
+    } catch {
+      // Best-effort only.
+    }
+
+    // Fallback: decapi (no-auth). Returns the avatar URL as plain text.
+    try {
+      const url = `https://decapi.me/twitch/avatar/${encodeURIComponent(
+        normalized
+      )}`;
+      const resp = await fetch(url, {
+        headers: { "User-Agent": "runalert-avatar" },
+      });
+      if (!resp.ok) return null;
+      const text = (await resp.text()).trim();
+      if (/^https?:\/\//i.test(text)) return text;
+    } catch {
+      // Best-effort only.
+    }
+
+    return null;
+  }
+
   // Allow local dev frontends (Vite often bumps ports if 5173 is taken).
   // Keep this restricted to localhost / 127.0.0.1 for safety.
   app.use(
@@ -327,11 +424,7 @@ function createApp({
           runId = await paceman.getRecentRunId(name, 1);
           if (runId) {
             const world = await paceman.getWorld(runId);
-            twitch =
-              typeof world?.data?.twitch === "string" &&
-              world.data.twitch.trim()
-                ? world.data.twitch.trim()
-                : null;
+            twitch = normalizeTwitchHandle(world?.data?.twitch);
             uuid =
               typeof world?.data?.uuid === "string" && world.data.uuid.trim()
                 ? world.data.uuid.trim()
@@ -345,13 +438,18 @@ function createApp({
         }
 
         // No-auth MVP: use public avatar services.
-        // - Twitch profile image: unavatar supports twitch logins without keys.
+        // - Twitch profile image: prefer Helix/decapi, fall back to unavatar.
         // - Minecraft head: crafatar supports UUID heads.
-        const avatarUrl = twitch
-          ? `https://unavatar.io/twitch/${encodeURIComponent(twitch)}`
-          : uuid
-            ? `https://crafatar.com/avatars/${encodeURIComponent(uuid)}?size=256&overlay`
-            : null;
+        const twitchAvatarUrl = twitch
+          ? await fetchTwitchAvatarUrl(twitch)
+          : null;
+        const avatarUrl =
+          twitchAvatarUrl ||
+          (twitch
+            ? `https://unavatar.io/twitch/${encodeURIComponent(twitch)}`
+            : uuid
+              ? `https://crafatar.com/avatars/${encodeURIComponent(uuid)}?size=256&overlay`
+              : null);
 
         const value = { runId, twitch, uuid, avatarUrl };
         // Cache hard: avatars don't change often.
@@ -531,36 +629,6 @@ function createApp({
         }
       }
 
-      async function getTwitchAppToken() {
-        if (!TWITCH_CLIENT_ID || !TWITCH_CLIENT_SECRET) return null;
-        const cached = cacheGet("twitchAppToken");
-        if (cached?.token && typeof cached?.exp === "number") {
-          // refresh a minute early
-          if (Date.now() < cached.exp - 60_000) return cached.token;
-        }
-
-        try {
-          const tokenUrl =
-            "https://id.twitch.tv/oauth2/token" +
-            `?client_id=${encodeURIComponent(TWITCH_CLIENT_ID)}` +
-            `&client_secret=${encodeURIComponent(TWITCH_CLIENT_SECRET)}` +
-            "&grant_type=client_credentials";
-          const resp = await fetch(tokenUrl, { method: "POST" });
-          if (!resp.ok) return null;
-          const data = await resp.json();
-          const token = data?.access_token;
-          const expiresIn = Number(data?.expires_in) || 3600;
-          if (!token) return null;
-          cacheSet("twitchAppToken", {
-            token,
-            exp: Date.now() + expiresIn * 1000,
-          }, expiresIn * 1000);
-          return token;
-        } catch {
-          return null;
-        }
-      }
-
       async function fetchTwitchLive(handle) {
         const raw = String(handle || "").trim();
         if (!raw) return null;
@@ -644,11 +712,12 @@ function createApp({
           }
           if (runId) {
             const world = await paceman.getWorld(runId);
-            twitchHandle =
+            const rawTwitch =
               typeof world?.data?.twitch === "string" &&
               world.data.twitch.trim()
                 ? world.data.twitch.trim()
                 : null;
+            twitchHandle = normalizeTwitchHandle(rawTwitch);
             isLive = !!world?.isLive;
             // Paceman's isLive is run-level ("in liveruns") and can go false even while a runner is still playing.
             // For a more human-friendly "active" signal, we treat "recently updated" as active.
@@ -673,6 +742,7 @@ function createApp({
               name,
               world?.data?.nickname,
               world?.data?.twitch,
+              twitchHandle,
             ]);
             if (liveRun) {
               isLive = true;

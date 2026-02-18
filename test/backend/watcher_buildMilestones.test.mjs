@@ -24,6 +24,7 @@ function at(hhmm) {
 }
 
 describe("watcher helpers", () => {
+  // Test: buildMilestones includes profile-only milestones (not just defaults)
   it("buildMilestones includes profile-only milestones (not just defaults)", () => {
     // Beginner summary: if a streamer profile contains milestones not in defaultMilestones,
     // the watcher still needs to evaluate them (or you'll miss alerts).
@@ -42,6 +43,7 @@ describe("watcher helpers", () => {
     expect(Object.keys(STREAMER_MILESTONES.xQcOW)).toContain("bastion");
   });
 
+  // Test: inQuietHours handles wrap-around ranges
   it("inQuietHours handles wrap-around ranges", () => {
     // Beginner summary: quiet hours like 23:00-02:00 should treat times after midnight as "quiet".
     const range = "23:00-02:00";
@@ -51,6 +53,7 @@ describe("watcher helpers", () => {
     expect(inQuietHours(range, new Date("2026-01-02T03:00:00"))).toBe(false);
   });
 
+  // Test: isTimeInQuietRange uses start-inclusive / end-exclusive semantics
   it("isTimeInQuietRange uses start-inclusive / end-exclusive semantics", () => {
     // 12:00-14:00 means [12:00, 14:00)
     expect(isTimeInQuietRange("12:00-14:00", at("12:00"))).toBe(true);
@@ -59,6 +62,7 @@ describe("watcher helpers", () => {
     expect(isTimeInQuietRange("12:00-14:00", at("11:59"))).toBe(false);
   });
 
+  // Test: inQuietHours supports multiple spans (array) and matches only inside them
   it("inQuietHours supports multiple spans (array) and matches only inside them", () => {
     const spans = ["21:00-09:00", "12:00-14:00"];
 
@@ -79,12 +83,14 @@ describe("watcher helpers", () => {
     expect(inQuietHours(spans, at("20:59"))).toBe(false);
   });
 
+  // Test: inQuietHours is resilient to invalid entries in multi-span arrays
   it("inQuietHours is resilient to invalid entries in multi-span arrays", () => {
     const spans = ["nope", "12:00-14:00", "25:00-26:00"];
     expect(inQuietHours(spans, at("13:00"))).toBe(true);
     expect(inQuietHours(spans, at("15:00"))).toBe(false);
   });
 
+  // Test: buildMilestones preserves enabled flag from defaults and profiles
   it("buildMilestones preserves enabled flag from defaults and profiles", () => {
     // Critical: The enabled flag must be preserved through config merging
     // so that disabled milestones in the UI actually suppress notifications.

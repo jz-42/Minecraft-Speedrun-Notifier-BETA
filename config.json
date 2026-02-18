@@ -8,6 +8,10 @@
     "enabled": true,
     "sound": true
   },
+  "agent": {
+    "autoUpdate": true,
+    "forsenOcr": false
+  },
   "channels": [
     "desktop"
   ],

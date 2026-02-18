@@ -12,6 +12,7 @@ import fmt from "../../src/watcher/notification_format.js";
 const { milestoneEmoji, milestonePrettyLabel, formatNotificationTitle } = fmt;
 
 describe("notification title formatting", () => {
+  // Test: maps milestone -> emoji exactly
   it("maps milestone -> emoji exactly", () => {
     // Beginner summary: each milestone gets a recognizable emoji set in the banner.
     expect(milestoneEmoji("nether")).toBe("🔥");
@@ -23,6 +24,7 @@ describe("notification title formatting", () => {
     expect(milestoneEmoji("finish")).toBe("👑");
   });
 
+  // Test: maps milestone -> friendly label exactly
   it("maps milestone -> friendly label exactly", () => {
     // Beginner summary: labels should be human-friendly (not raw config keys).
     expect(milestonePrettyLabel("nether")).toBe("Nether");
@@ -34,6 +36,7 @@ describe("notification title formatting", () => {
     expect(milestonePrettyLabel("finish")).toBe("Finish");
   });
 
+  // Test: formats the title like: <Milestone> <emoji> — M:SS (<streamer>)
   it("formats the title like: <Milestone> <emoji> — M:SS (<streamer>)", () => {
     // Beginner summary: this is the exact banner style shown to users.
     const t1 = formatNotificationTitle({
